@@ -1,7 +1,4 @@
-<<<<<<< Updated upstream
-=======
 // src/middleware/auth.ts
->>>>>>> Stashed changes
 import { Request, Response, NextFunction } from 'express';
 import jwt from 'jsonwebtoken';
 import { CONFIG } from '../config/env';

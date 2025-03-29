@@ -13,12 +13,9 @@ passport.use(
       clientSecret: env.GOOGLE_CLIENT_SECRET,
       callbackURL: env.GOOGLE_CALLBACK_URL,
       scope: ['profile', 'email'],
-<<<<<<< Updated upstream
-=======
       passReqToCallback: true, // ส่ง request object ให้กับ callback
->>>>>>> Stashed changes
     },
-    async (accessToken, refreshToken, profile, done) => {
+    async (req, accessToken, refreshToken, profile, done) => {
       try {
         // ตรวจสอบว่ามีผู้ใช้ในฐานข้อมูลหรือไม่
         let user = await prisma.user.findFirst({
@@ -42,15 +39,24 @@ passport.use(
           });
 
           if (existingUser) {
-            // ถ้ามีผู้ใช้ที่ลงทะเบียนด้วยอีเมลนี้แล้ว ให้อัปเดตข้อมูล OAuth
-            user = await prisma.user.update({
-              where: { id: existingUser.id },
-              data: {
-                provider: 'google',
-                providerId: profile.id,
-                profileImage: profile.photos?.[0]?.value || null,
-              },
-            });
+            // เปลี่ยนจากการอัปเดตเป็นการแจ้งเตือนว่ามีอีเมลนี้ในระบบแล้ว
+            if (existingUser.provider === 'local') {
+              // ถ้ามีบัญชี local ที่ใช้อีเมลนี้แล้ว ไม่ให้เชื่อมโยงกับ Google
+              return done(null, false, { 
+                message: 'อีเมลนี้มีบัญชีในระบบแล้ว กรุณาเข้าสู่ระบบด้วยรหัสผ่าน',
+                email,
+                errorCode: 'EMAIL_EXISTS_AS_LOCAL'
+              });
+            } else if (existingUser.provider === 'google') {
+              // ถ้ามีบัญชี Google ที่ใช้อีเมลนี้แล้ว แต่ providerId ไม่ตรงกัน (อาจจะมีการเปลี่ยน Google Account)
+              user = await prisma.user.update({
+                where: { id: existingUser.id },
+                data: {
+                  providerId: profile.id,
+                  profileImage: profile.photos?.[0]?.value || null,
+                },
+              });
+            }
           } else {
             // สร้าง username จากชื่อของผู้ใช้
             const displayName = profile.displayName || 
