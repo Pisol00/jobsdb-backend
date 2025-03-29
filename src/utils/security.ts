@@ -38,48 +38,6 @@ export const comparePassword = async (
 };
 
 /**
- * เปรียบเทียบสตริงแบบเวลาคงที่เพื่อป้องกัน timing attack
- * @param a สตริงแรก (เช่น OTP ที่ถูกต้อง)
- * @param b สตริงที่สอง (เช่น OTP ที่ผู้ใช้ป้อน)
- * @returns true ถ้าสตริงเหมือนกัน, false ถ้าต่างกัน
- */
-export const constantTimeCompare = (a: string, b: string): boolean => {
-  // ถ้าความยาวไม่เท่ากัน ให้ถือว่าไม่ตรงกัน แต่ยังคงทำการเปรียบเทียบเพื่อให้ใช้เวลาคงที่
-  if (a.length !== b.length) {
-    // ใช้ความยาวสูงสุดเพื่อให้การเปรียบเทียบใช้เวลานานเท่ากัน
-    const maxLength = Math.max(a.length, b.length);
-    
-    // สร้างสตริงเทียบสำหรับสตริงที่สั้นกว่า
-    let paddedA = a;
-    let paddedB = b;
-    
-    if (a.length < maxLength) {
-      paddedA = a.padEnd(maxLength, '\0');
-    } else {
-      paddedB = b.padEnd(maxLength, '\0');
-    }
-    
-    // ตั้งค่าเริ่มต้นสำหรับผลลัพธ์
-    let result = 0;
-    
-    // เปรียบเทียบทีละตัวอักษร
-    for (let i = 0; i < maxLength; i++) {
-      result |= paddedA.charCodeAt(i) ^ paddedB.charCodeAt(i);
-    }
-    
-    return result === 0;
-  }
-  
-  // ถ้าความยาวเท่ากัน
-  let result = 0;
-  for (let i = 0; i < a.length; i++) {
-    result |= a.charCodeAt(i) ^ b.charCodeAt(i);
-  }
-  
-  return result === 0;
-};
-
-/**
  * ตรวจสอบว่าอุปกรณ์เป็นที่น่าเชื่อถือสำหรับผู้ใช้หรือไม่
  */
 export const checkTrustedDevice = async (userId: string, deviceId: string): Promise<boolean> => {
