@@ -2,7 +2,7 @@
 import { Request, Response } from 'express';
 import { v4 as uuidv4 } from 'uuid';
 import prisma from '../../utils/prisma';
-import { comparePassword, checkTrustedDevice, checkBruteForceProtection, recordLoginAttempt, generateOTP } from '../../utils/security';
+import { comparePassword, checkTrustedDevice, checkBruteForceProtection, recordLoginAttempt, generateOTP, resetFailedLoginAttempts } from '../../utils/security';
 import { generateToken, generateTempToken } from '../../utils/jwt';
 import { sendOTPEmail } from '../../utils/email';
 import { formatUserResponse } from './index';
@@ -53,44 +53,7 @@ export const login = asyncHandler(async (req: Request, res: Response) => {
       lockoutRemaining: bruteForceCheck.remainingTime
     });
   }
-
-  // ตรวจสอบจำนวนครั้งที่ล็อกอินผิดในช่วงเวลาที่กำหนด
-  const checkFrom = new Date(Date.now() - CONFIG.SECURITY.ATTEMPT_WINDOW);
   
-  // สร้างเงื่อนไขการค้นหา
-  const whereConditions = [
-    {
-      ipAddress: req.ip || req.socket.remoteAddress || 'unknown',
-      isSuccess: false,
-      createdAt: { gte: checkFrom }
-    },
-    {
-      usernameOrEmail,
-      isSuccess: false, 
-      createdAt: { gte: checkFrom }
-    }
-  ];
-  
-  // เพิ่มเงื่อนไข deviceId ถ้ามีค่า
-  if (clientDeviceId) {
-    whereConditions.push({
-      deviceId: clientDeviceId,
-      isSuccess: false,
-      createdAt: { gte: checkFrom }
-    });
-  }
-  
-  // นับจำนวนครั้งที่ล็อกอินผิด
-  const failedAttempts = await prisma.loginAttempt.count({
-    where: {
-      OR: whereConditions
-    }
-  }).catch(error => {
-    logMessage(LogLevel.ERROR, "Error counting failed login attempts", error as Error, context);
-    // คืนค่า 0 ในกรณีที่เกิดข้อผิดพลาด เพื่อให้โปรแกรมทำงานต่อได้
-    return 0;
-  });
-
   // ค้นหาผู้ใช้ตาม email หรือ username
   const isEmail = usernameOrEmail.includes("@");
   const user = await prisma.user.findFirst({
@@ -106,12 +69,9 @@ export const login = asyncHandler(async (req: Request, res: Response) => {
         logMessage(LogLevel.ERROR, "Error recording failed login attempt", error as Error, context);
       });
     
-    // คำนวณจำนวนครั้งที่เหลือ (หลังจากบันทึกความพยายามล็อกอินครั้งนี้แล้ว)
-    const attemptsLeft = CONFIG.SECURITY.MAX_LOGIN_ATTEMPTS - (failedAttempts + 1);
-    
     return res.status(401).json({
       success: false,
-      message: `ชื่อผู้ใช้/อีเมล หรือรหัสผ่านไม่ถูกต้อง (เหลือโอกาสอีก ${attemptsLeft > 0 ? attemptsLeft : 0} ครั้ง)`,
+      message: `ชื่อผู้ใช้/อีเมล หรือรหัสผ่านไม่ถูกต้อง ${bruteForceCheck.message || ''}`,
       code: "INVALID_CREDENTIALS"
     });
   }
@@ -127,12 +87,9 @@ export const login = asyncHandler(async (req: Request, res: Response) => {
         logMessage(LogLevel.ERROR, "Error recording failed login attempt for OAuth user", error as Error, context);
       });
     
-    // คำนวณจำนวนครั้งที่เหลือ
-    const attemptsLeft = CONFIG.SECURITY.MAX_LOGIN_ATTEMPTS - (failedAttempts + 1);
-    
     return res.status(401).json({
       success: false,
-      message: `บัญชีนี้ใช้การเข้าสู่ระบบด้วย Google กรุณาใช้ปุ่ม "เข้าสู่ระบบด้วย Google" (เหลือโอกาสอีก ${attemptsLeft > 0 ? attemptsLeft : 0} ครั้ง)`,
+      message: `บัญชีนี้ใช้การเข้าสู่ระบบด้วย Google กรุณาใช้ปุ่ม "เข้าสู่ระบบด้วย Google" ${bruteForceCheck.message || ''}`,
       code: "OAUTH_ACCOUNT"
     });
   }
@@ -147,27 +104,38 @@ export const login = asyncHandler(async (req: Request, res: Response) => {
         logMessage(LogLevel.ERROR, "Error recording failed login attempt with wrong password", error as Error, context);
       });
     
-    // คำนวณจำนวนครั้งที่เหลือ
-    const attemptsLeft = CONFIG.SECURITY.MAX_LOGIN_ATTEMPTS - (failedAttempts + 1);
-    
-    // ถ้าเกินจำนวนครั้งที่กำหนด ให้ล็อค
-    if (attemptsLeft <= 0) {
-      logMessage(LogLevel.WARN, `Account locked due to too many failed login attempts`, null, context);
+    // ตรวจสอบอีกครั้งหลังจากบันทึกความพยายามล็อกอินที่ล้มเหลว
+    // เนื่องจากการบันทึกล่าสุดอาจทำให้เกินจำนวนครั้งที่อนุญาต
+    const updatedCheck = await checkBruteForceProtection(usernameOrEmail, req)
+      .catch(error => {
+        logMessage(LogLevel.ERROR, "Error checking brute force protection after failed login", error as Error, context);
+        return { isLocked: false };
+      });
+      
+    if (updatedCheck.isLocked) {
+      logMessage(LogLevel.WARN, `Account locked after failed login attempt`, null, context);
       
       return res.status(429).json({
         success: false,
-        message: "บัญชีถูกล็อคชั่วคราว 5 นาที เนื่องจากคุณล็อกอินผิดหลายครั้งเกินไป",
+        message: updatedCheck.message,
         code: "ACCOUNT_LOCKED",
-        lockoutRemaining: CONFIG.SECURITY.LOCKOUT_DURATION / 1000
+        lockoutRemaining: updatedCheck.remainingTime
       });
     }
     
     return res.status(401).json({
       success: false,
-      message: `ชื่อผู้ใช้/อีเมล หรือรหัสผ่านไม่ถูกต้อง (เหลือโอกาสอีก ${attemptsLeft} ครั้ง)`,
+      message: `ชื่อผู้ใช้/อีเมล หรือรหัสผ่านไม่ถูกต้อง ${updatedCheck.message || ''}`,
       code: "INVALID_CREDENTIALS"
     });
   }
+
+  // รีเซ็ตการนับความพยายามล็อกอินที่ล้มเหลวเมื่อล็อกอินสำเร็จ
+  await resetFailedLoginAttempts(
+    usernameOrEmail, 
+    req.ip || req.socket.remoteAddress || 'unknown', 
+    clientDeviceId
+  );
 
   // ตรวจสอบว่าอีเมลได้รับการยืนยันหรือไม่
   if (!user.isEmailVerified) {

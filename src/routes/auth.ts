@@ -51,7 +51,7 @@ router.get(
 router.get(
   '/google/callback',
   (req, res, next) => {
-    passport.authenticate('google', { session: false }, (err, user, info) => {
+    passport.authenticate('google', { session: false }, async (err, user, info) => {
       // จัดการกรณีที่มีข้อผิดพลาด
       if (err) {
         console.error('❌ Google auth error:', err);
@@ -68,11 +68,23 @@ router.get(
         return res.redirect(`${FRONTEND_URL}/auth/login?error=google_failed`);
       }
       
-      // สร้าง JWT token (กำหนด rememberMe เป็น true เพื่อให้ token มีอายุยาวนาน)
-      const token = generateToken(user, true);
-      
-      // ส่งกลับไปยัง frontend พร้อม token
-      res.redirect(`${FRONTEND_URL}/oauth-callback?token=${token}`);
+      try {
+        // รีเซ็ตการนับความพยายามล็อกอินที่ล้มเหลว เมื่อล็อกอินผ่าน OAuth สำเร็จ
+        await resetFailedLoginAttempts(
+          user.email,
+          req.ip || req.socket.remoteAddress || 'unknown',
+          req.headers['user-agent'] || 'oauth-login'
+        );
+
+        // สร้าง JWT token (กำหนด rememberMe เป็น true เพื่อให้ token มีอายุยาวนาน)
+        const token = generateToken(user, true);
+        
+        // ส่งกลับไปยัง frontend พร้อม token
+        res.redirect(`${FRONTEND_URL}/oauth-callback?token=${token}`);
+      } catch (error) {
+        console.error('❌ Error in OAuth callback:', error);
+        res.redirect(`${FRONTEND_URL}/auth/login?error=google_failed`);
+      }
     })(req, res, next);
   }
 );

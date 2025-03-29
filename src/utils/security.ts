@@ -148,6 +148,7 @@ export const recordLoginAttempt = async (
 
 /**
  * ตรวจสอบการป้องกัน Brute Force
+ * ตรวจสอบว่าบัญชีหรือ IP ถูกล็อคเนื่องจากมีการล็อกอินล้มเหลวเกินจำนวนที่กำหนดหรือไม่
  */
 export const checkBruteForceProtection = async (
   usernameOrEmail: string,
@@ -157,107 +158,152 @@ export const checkBruteForceProtection = async (
     const ipAddress = req.ip || req.socket.remoteAddress || 'unknown';
     const deviceId = req.body.deviceId;
     
-    // คำนวณช่วงเวลาที่จะตรวจสอบ
+    // ตรวจสอบช่วงเวลาสำหรับการนับความพยายามล็อกอินที่ล้มเหลว
     const checkFrom = new Date(Date.now() - CONFIG.SECURITY.ATTEMPT_WINDOW);
     
-    // สร้างเงื่อนไขสำหรับการค้นหา
-    const whereConditions = [
-      {
-        ipAddress,
-        isSuccess: false,
-        createdAt: { gte: checkFrom }
-      },
-      {
-        usernameOrEmail,
-        isSuccess: false, 
-        createdAt: { gte: checkFrom }
-      }
-    ];
-    
-    // เพิ่มเงื่อนไข deviceId หากมีค่า
-    if (deviceId) {
-      whereConditions.push({
-        deviceId,
-        isSuccess: false,
-        createdAt: { gte: checkFrom }
-      });
-    }
-    
-    // ตรวจสอบจำนวนครั้งที่ล็อกอินผิดในช่วงเวลาที่กำหนด
-    const failedAttempts = await prisma.loginAttempt.count({
+    // ค้นหาการล็อกอินล้มเหลวล่าสุด (ใช้สำหรับคำนวณระยะเวลาที่ล็อค)
+    const lastFailedAttempt = await prisma.loginAttempt.findFirst({
       where: {
-        OR: whereConditions
-      }
+        OR: [
+          { ipAddress, isSuccess: false },
+          { usernameOrEmail, isSuccess: false },
+          ...(deviceId ? [{ deviceId, isSuccess: false }] : [])
+        ],
+      },
+      orderBy: { createdAt: 'desc' },
     });
-    
-    // ถ้าไม่เกินจำนวนครั้งที่กำหนด
-    if (failedAttempts < CONFIG.SECURITY.MAX_LOGIN_ATTEMPTS) {
+
+    // ถ้าไม่มีการล็อกอินล้มเหลว หรือการล็อกอินล้มเหลวอยู่นอกช่วงเวลาที่กำหนด
+    if (!lastFailedAttempt || lastFailedAttempt.createdAt < checkFrom) {
       return { isLocked: false };
     }
-    
-    // สร้างเงื่อนไขสำหรับการค้นหาล็อกอินสำเร็จและล้มเหลวล่าสุด
-    const successConditions = [];
-    const failedConditions = [];
-    
-    // เพิ่มเงื่อนไข IP
-    successConditions.push({ ipAddress, isSuccess: true });
-    failedConditions.push({ ipAddress, isSuccess: false });
-    
-    // เพิ่มเงื่อนไข usernameOrEmail
-    successConditions.push({ usernameOrEmail, isSuccess: true });
-    failedConditions.push({ usernameOrEmail, isSuccess: false });
-    
-    // เพิ่มเงื่อนไข deviceId หากมีค่า
-    if (deviceId) {
-      successConditions.push({ deviceId, isSuccess: true });
-      failedConditions.push({ deviceId, isSuccess: false });
-    }
-    
-    // ตรวจสอบการล็อกอินสำเร็จล่าสุด
-    const lastSuccessfulLogin = await prisma.loginAttempt.findFirst({
+
+    // ตรวจสอบว่าหลังจากล็อกอินล้มเหลวครั้งล่าสุด มีการล็อกอินสำเร็จหรือไม่
+    const lastSuccessfulAttempt = await prisma.loginAttempt.findFirst({
       where: {
-        OR: successConditions
+        OR: [
+          { ipAddress, isSuccess: true },
+          { usernameOrEmail, isSuccess: true },
+          ...(deviceId ? [{ deviceId, isSuccess: true }] : [])
+        ],
       },
-      orderBy: { createdAt: 'desc' }
+      orderBy: { createdAt: 'desc' },
     });
-    
-    // ตรวจสอบการล็อกอินผิดล่าสุด
-    const lastFailedLogin = await prisma.loginAttempt.findFirst({
-      where: {
-        OR: failedConditions
-      },
-      orderBy: { createdAt: 'desc' }
-    });
-    
-    // ถ้าไม่มีข้อมูลการล็อกอินผิดล่าสุด
-    if (!lastFailedLogin) {
+
+    // ถ้ามีการล็อกอินสำเร็จหลังจากล้มเหลวครั้งล่าสุด แสดงว่าบัญชีถูกปลดล็อคแล้ว
+    if (lastSuccessfulAttempt && lastSuccessfulAttempt.createdAt > lastFailedAttempt.createdAt) {
       return { isLocked: false };
     }
-    
-    // ถ้ามีการล็อกอินสำเร็จหลังจากการล็อกอินผิดล่าสุด
-    if (lastSuccessfulLogin && lastSuccessfulLogin.createdAt > lastFailedLogin.createdAt) {
-      return { isLocked: false };
-    }
-    
-    // ตรวจสอบว่ายังอยู่ในช่วงเวลาล็อคหรือไม่
-    const lockoutTime = new Date(lastFailedLogin.createdAt.getTime() + CONFIG.SECURITY.LOCKOUT_DURATION);
-    const now = new Date();
-    
-    if (now < lockoutTime) {
-      // คำนวณเวลาที่เหลือในการล็อค (เป็นวินาที)
-      const remainingTime = Math.ceil((lockoutTime.getTime() - now.getTime()) / 1000);
-      return {
-        isLocked: true,
-        message: `บัญชีถูกล็อคชั่วคราว กรุณาลองใหม่ในอีก ${Math.floor(remainingTime / 60)}:${(remainingTime % 60).toString().padStart(2, '0')} นาที`,
-        remainingTime
+
+    // นับจำนวนการล็อกอินที่ล้มเหลวในช่วงเวลาที่กำหนด
+    const failedAttemptsCount = await prisma.loginAttempt.count({
+      where: {
+        OR: [
+          { ipAddress, isSuccess: false, createdAt: { gte: checkFrom } },
+          { usernameOrEmail, isSuccess: false, createdAt: { gte: checkFrom } },
+          ...(deviceId ? [{ deviceId, isSuccess: false, createdAt: { gte: checkFrom } }] : [])
+        ],
+      },
+    });
+
+    // ถ้าจำนวนครั้งไม่เกินที่กำหนด บัญชีไม่ถูกล็อค
+    if (failedAttemptsCount < CONFIG.SECURITY.MAX_LOGIN_ATTEMPTS) {
+      // คำนวณจำนวนครั้งที่เหลือก่อนถูกล็อค
+      const attemptsLeft = CONFIG.SECURITY.MAX_LOGIN_ATTEMPTS - failedAttemptsCount;
+      return { 
+        isLocked: false,
+        message: `เหลือโอกาสอีก ${attemptsLeft} ครั้ง`
       };
     }
-    
+
+    // คำนวณระยะเวลาที่บัญชีถูกล็อค
+    const lockoutTime = new Date(lastFailedAttempt.createdAt.getTime() + CONFIG.SECURITY.LOCKOUT_DURATION);
+    const now = new Date();
+
+    // ถ้าปัจจุบันอยู่ในช่วงเวลาที่ถูกล็อค
+    if (now < lockoutTime) {
+      const remainingMs = lockoutTime.getTime() - now.getTime();
+      const remainingSeconds = Math.ceil(remainingMs / 1000);
+      const minutes = Math.floor(remainingSeconds / 60);
+      const seconds = remainingSeconds % 60;
+
+      return {
+        isLocked: true,
+        message: `บัญชีถูกล็อคชั่วคราว กรุณาลองใหม่ในอีก ${minutes}:${seconds.toString().padStart(2, '0')} นาที`,
+        remainingTime: remainingSeconds
+      };
+    }
+
+    // หากพ้นระยะเวลาล็อคแล้ว อนุญาตให้ล็อกอินใหม่ได้
     return { isLocked: false };
   } catch (error) {
+    // บันทึก log error และให้ล็อกอินได้ (เพื่อหลีกเลี่ยงการปิดกั้นผู้ใช้เมื่อระบบมีปัญหา)
     logMessage(LogLevel.ERROR, 'Error checking brute force protection', error as Error, {
       usernameOrEmail, ip: req.ip
     });
-    return { isLocked: false }; // ถ้าเกิดข้อผิดพลาด ให้อนุญาตให้ล็อกอินได้
+    return { isLocked: false };
+  }
+};
+
+/**
+ * รีเซ็ตการนับความพยายามล็อกอินที่ล้มเหลว
+ * เรียกใช้ฟังก์ชันนี้เมื่อผู้ใช้ล็อกอินสำเร็จ
+ */
+/**
+ * รีเซ็ตการนับความพยายามล็อกอินที่ล้มเหลวหลังจากล็อกอินสำเร็จ
+ * เพื่อให้ผู้ใช้เริ่มต้นใหม่หมดในครั้งถัดไป
+ */
+export const resetFailedLoginAttempts = async (
+  usernameOrEmail: string,
+  ipAddress: string,
+  deviceId?: string
+): Promise<void> => {
+  try {
+    // บันทึกการล็อกอินสำเร็จ
+    await prisma.loginAttempt.create({
+      data: {
+        ipAddress,
+        usernameOrEmail,
+        isSuccess: true,
+        deviceId,
+      },
+    });
+
+    // หาผู้ใช้จากชื่อผู้ใช้หรืออีเมล
+    const isEmail = usernameOrEmail.includes("@");
+    const user = await prisma.user.findFirst({
+      where: isEmail
+        ? { email: usernameOrEmail }
+        : { username: usernameOrEmail },
+      select: { id: true }
+    });
+
+    // ถ้าพบผู้ใช้ ทำเครื่องหมายว่าล็อกอินสำเร็จสำหรับทุกความพยายามที่บันทึกในช่วงการตรวจสอบ
+    if (user) {
+      // อัปเดตฟิลด์ userId ของความพยายามล็อกอินที่ล้มเหลวทุกรายการในช่วงเวลาที่กำหนด
+      // เพื่อเชื่อมโยงกับผู้ใช้ให้ถูกต้อง (เป็นประโยชน์ในการวิเคราะห์ความปลอดภัย)
+      const checkFrom = new Date(Date.now() - CONFIG.SECURITY.ATTEMPT_WINDOW);
+      await prisma.loginAttempt.updateMany({
+        where: {
+          OR: [
+            { usernameOrEmail, userId: null, createdAt: { gte: checkFrom } },
+            { ipAddress, userId: null, createdAt: { gte: checkFrom } },
+            ...(deviceId ? [{ deviceId, userId: null, createdAt: { gte: checkFrom } }] : [])
+          ]
+        },
+        data: {
+          userId: user.id
+        }
+      });
+    }
+
+    logMessage(LogLevel.INFO, `Reset failed login attempts for ${usernameOrEmail}`, null, {
+      usernameOrEmail, ipAddress, deviceId
+    });
+  } catch (error) {
+    logMessage(LogLevel.ERROR, `Failed to reset login attempts for ${usernameOrEmail}`, error as Error, {
+      usernameOrEmail, ipAddress, deviceId
+    });
+    // ไม่ throw error เพื่อให้การล็อกอินสำเร็จแม้จะมีข้อผิดพลาดในฟังก์ชันนี้
   }
 };

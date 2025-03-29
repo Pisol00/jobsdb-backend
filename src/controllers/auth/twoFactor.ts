@@ -28,14 +28,26 @@ export const toggleTwoFactor = asyncHandler(async (req: Request, res: Response) 
     });
   }
 
-  // อัพเดทสถานะ 2FA
+  // ล้าง OTP หลังจากใช้งาน
   await prisma.user.update({
     where: { id: user.id },
     data: {
-      twoFactorEnabled: enable,
+      twoFactorOTP: null,
+      twoFactorExpires: null,
     },
   });
 
+  // รีเซ็ตการนับความพยายามล็อกอินที่ล้มเหลว เมื่อยืนยัน 2FA สำเร็จ
+  await resetFailedLoginAttempts(
+    user.email,
+    req.ip || req.socket.remoteAddress || 'unknown', 
+    decoded.deviceId
+  );
+
+  // จดจำอุปกรณ์ถ้ามีการร้องขอและมี deviceId
+  if (rememberDevice && decoded.deviceId) {
+    await saveTrustedDevice(user.id, decoded.deviceId);
+  }
   // ล้างข้อมูลอุปกรณ์ที่น่าเชื่อถือถ้าปิดใช้งาน 2FA
   if (!enable) {
     await prisma.trustedDevice.deleteMany({
