@@ -81,7 +81,7 @@ router.get(
         const token = generateToken(user, true);
         
         // ส่งกลับไปยัง frontend พร้อม token
-        res.redirect(`${FRONTEND_URL}/oauth-callback?token=${token}`);
+        res.redirect(`${FRONTEND_URL}/oauth-callback/${token}`);
       } catch (error) {
         console.error('❌ Error in OAuth callback:', error);
         res.redirect(`${FRONTEND_URL}/auth/login?error=google_failed`);

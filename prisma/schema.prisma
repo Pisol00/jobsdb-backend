@@ -35,6 +35,8 @@ model User {
   
   // เพิ่มฟิลด์สำหรับติดตามการส่งอีเมลแจ้งเตือนการลบบัญชี
   lastWarningEmailSentAt DateTime? @map("last_warning_email_sent_at")
+  // เพิ่มฟิลด์ใหม่สำหรับนับจำนวนอีเมลแจ้งเตือนที่ส่งไปแล้ว
+  warningEmailCount   Int       @default(0) @map("warning_email_count")
   
   createdAt           DateTime  @default(now()) @map("created_at")
   updatedAt           DateTime  @updatedAt @map("updated_at")

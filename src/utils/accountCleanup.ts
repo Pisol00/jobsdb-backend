@@ -12,8 +12,8 @@ import { logMessage, LogLevel } from './errorLogger';
  * @returns จำนวนบัญชีที่ถูกลบและจำนวนอีเมลแจ้งเตือนที่ส่ง
  */
 export const cleanupUnverifiedAccounts = async (
-  daysBeforeWarning: number = 3,
-  daysBeforeDeletion: number = 7,
+  daysBeforeWarning: number = CONFIG.ACCOUNT_CLEANUP.DAYS_BEFORE_WARNING,
+  daysBeforeDeletion: number = CONFIG.ACCOUNT_CLEANUP.DAYS_BEFORE_DELETION,
   sendWarningEmails: boolean = true
 ): Promise<{ deletedCount: number; warningEmailsSent: number }> => {
   try {
@@ -36,39 +36,54 @@ export const cleanupUnverifiedAccounts = async (
             lte: warningDate,
             gt: deletionDate
           },
-          // ตรวจสอบว่าไม่เคยส่งอีเมลแจ้งเตือนในวันนี้หรือไม่เคยส่งเลย
+          // ตรวจสอบเงื่อนไขการส่งอีเมลแจ้งเตือน:
+          // 1. จำนวนอีเมลที่ส่งไปแล้วไม่เกินจำนวนสูงสุดที่กำหนด
+          warningEmailCount: { 
+            lt: CONFIG.ACCOUNT_CLEANUP.WARNING_EMAIL_MAX_COUNT 
+          },
+          // 2. ยังไม่เคยส่งอีเมลหรือส่งไปนานกว่าช่วงเวลาที่กำหนดแล้ว
           OR: [
             { lastWarningEmailSentAt: null },
             {
               lastWarningEmailSentAt: {
-                lt: new Date(new Date().setHours(0, 0, 0, 0))
+                lt: new Date(Date.now() - CONFIG.ACCOUNT_CLEANUP.WARNING_EMAIL_INTERVAL)
               }
             }
           ]
         }
       });
       
+      logMessage(
+        LogLevel.INFO,
+        `Found ${accountsToWarn.length} accounts to send warning emails`,
+        null
+      );
+      
       // ส่งอีเมลแจ้งเตือน
       for (const user of accountsToWarn) {
         try {
+          const remainingDays = daysBeforeDeletion - daysBeforeWarning;
           const emailSent = await sendAccountDeletionWarningEmail(
             user.email,
             user.fullName || user.username,
-            daysBeforeDeletion - daysBeforeWarning
+            remainingDays
           );
           
           if (emailSent) {
             warningEmailsSent++;
             
-            // บันทึกเวลาการส่งอีเมลล่าสุด
+            // บันทึกเวลาการส่งอีเมลล่าสุดและเพิ่มจำนวนอีเมลที่ส่งแล้ว
             await prisma.user.update({
               where: { id: user.id },
-              data: { lastWarningEmailSentAt: new Date() }
+              data: { 
+                lastWarningEmailSentAt: new Date(),
+                warningEmailCount: { increment: 1 }
+              }
             });
             
             logMessage(
               LogLevel.INFO,
-              `Sent warning email to ${user.email} for unverified account`,
+              `Sent warning email to ${user.email} for unverified account (${user.warningEmailCount + 1}/${CONFIG.ACCOUNT_CLEANUP.WARNING_EMAIL_MAX_COUNT})`,
               null,
               { userId: user.id }
             );

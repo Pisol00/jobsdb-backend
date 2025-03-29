@@ -38,6 +38,9 @@ const envSchema = z.object({
   ACCOUNT_CLEANUP_ENABLED: z.string().default('true'),
   ACCOUNT_CLEANUP_DAYS_WARNING: z.string().default('3'),
   ACCOUNT_CLEANUP_DAYS_DELETION: z.string().default('7'),
+  // เพิ่มค่าสำหรับการตั้งค่าความถี่การส่งอีเมล
+  WARNING_EMAIL_MAX_COUNT: z.string().default('1'),
+  WARNING_EMAIL_INTERVAL_DAYS: z.string().default('3'),
 });
 
 // พยายามแปลงและตรวจสอบตัวแปรสภาพแวดล้อม
@@ -68,8 +71,9 @@ export const CONFIG = {
     FROM: env.EMAIL_FROM
   },
   FRONTEND_URL: env.FRONTEND_URL,
-  OTP_EXPIRY: 10 * 60 * 100, // 10 นาที (มิลลิวินาที)
-  TRUSTED_DEVICE_EXPIRY: 60 * 60 * 24000, // 24 ชั่วโมง (มิลลิวินาที)
+  // แก้ไขค่าที่ผิดพลาด
+  OTP_EXPIRY: 10 * 60 * 1000, // 10 นาที (มิลลิวินาที) - แก้ไขจาก 100 เป็น 1000
+  TRUSTED_DEVICE_EXPIRY: 60 * 60 * 24 * 1000, // 24 ชั่วโมง (มิลลิวินาที) - แก้ไขจาก 24000
   SECURITY: {
     MAX_LOGIN_ATTEMPTS: 10, // จำนวนครั้งสูงสุดที่อนุญาตให้ล็อกอินผิด
     LOCKOUT_DURATION: 5 * 60 * 1000, // ระยะเวลาที่ล็อค (5 นาที)
@@ -78,6 +82,9 @@ export const CONFIG = {
   ACCOUNT_CLEANUP: {
     ENABLED: env.ACCOUNT_CLEANUP_ENABLED === 'true',
     DAYS_BEFORE_WARNING: parseInt(env.ACCOUNT_CLEANUP_DAYS_WARNING, 10),
-    DAYS_BEFORE_DELETION: parseInt(env.ACCOUNT_CLEANUP_DAYS_DELETION, 10)
+    DAYS_BEFORE_DELETION: parseInt(env.ACCOUNT_CLEANUP_DAYS_DELETION, 10),
+    // เพิ่มค่าใหม่สำหรับการจัดการอีเมลแจ้งเตือน
+    WARNING_EMAIL_MAX_COUNT: parseInt(env.WARNING_EMAIL_MAX_COUNT, 10),
+    WARNING_EMAIL_INTERVAL: parseInt(env.WARNING_EMAIL_INTERVAL_DAYS, 10) * 24 * 60 * 60 * 1000, // แปลงวันเป็นมิลลิวินาที
   }
 };
