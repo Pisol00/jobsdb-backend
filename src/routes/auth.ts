@@ -11,7 +11,7 @@ import {
   verifyOTP,
   toggleTwoFactor,
   verifyTempToken
-} from '../controllers/auth';
+} from '../config/controllers/auth';
 import { authenticateUser } from '../middleware/auth';
 import { CONFIG } from '../config/env';
 import { generateToken } from '../utils/jwt';

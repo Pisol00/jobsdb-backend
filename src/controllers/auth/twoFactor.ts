@@ -1,10 +1,10 @@
 // src/controllers/auth/twoFactor.ts
 import { Request, Response } from 'express';
-import prisma from '../../utils/prisma';
-import { verifyToken, generateToken } from '../../utils/jwt';
-import { saveTrustedDevice } from '../../utils/security';
+import prisma from '../../../utils/prisma';
+import { verifyToken, generateToken } from '../../../utils/jwt';
+import { saveTrustedDevice } from '../../../utils/security';
 import { formatUserResponse } from './index';
-import { VerifyOTPRequest } from '../../types/auth';
+import { VerifyOTPRequest } from '../../../types/auth';
 
 /**
  * เปิด/ปิดการยืนยันตัวตนแบบสองขั้นตอน
