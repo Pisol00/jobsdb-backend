@@ -1,7 +1,7 @@
 // src/utils/email.ts
 import { CONFIG } from '../config/env';
 import { UserData } from './jwt';
-import { createEmailTransporter } from '../config/email';
+import { createEmailTransporter, createWelcomeEmailTemplate } from '../config/email';
 
 /**
  * ส่งอีเมล
@@ -114,4 +114,16 @@ export const sendOTPEmail = async (
 
   const emailHTML = createOTPEmailTemplate(otp, tempToken, fullName);
   return await sendEmail(email, "รหัสยืนยันตัวตนแบบสองขั้นตอน JobsDB", emailHTML);
+};
+
+/**
+ * ส่งอีเมลต้อนรับหลังจากลงทะเบียน
+ */
+export const sendWelcomeEmail = async (
+  email: string,
+  fullName: string | null,
+  username: string
+): Promise<boolean> => {
+  const emailHTML = createWelcomeEmailTemplate(fullName, username);
+  return await sendEmail(email, "ยินดีต้อนรับสู่ JobsDB", emailHTML);
 };

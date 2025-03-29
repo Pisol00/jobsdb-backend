@@ -7,6 +7,8 @@ import { generateToken } from '../../utils/jwt';
 import { formatUserResponse } from './index';
 import { RegisterRequest } from '../../types/auth';
 import { asyncHandler } from '../../middleware/asyncHandler';
+import { sendWelcomeEmail } from '../../utils/email';
+import { logMessage, LogLevel } from '../../utils/errorLogger';
 
 /**
  * ลงทะเบียนผู้ใช้ใหม่
@@ -77,6 +79,19 @@ export const register = asyncHandler(async (req: Request, res: Response) => {
 
   // สร้าง token
   const token = generateToken(user);
+
+  // ส่งอีเมลต้อนรับ (ไม่รอการส่งอีเมลเสร็จ)
+  sendWelcomeEmail(email, fullName, username)
+    .then(sent => {
+      if (sent) {
+        logMessage(LogLevel.INFO, `Welcome email sent to ${email}`, null, { userId: user.id });
+      } else {
+        logMessage(LogLevel.WARN, `Failed to send welcome email to ${email}`, null, { userId: user.id });
+      }
+    })
+    .catch(error => {
+      logMessage(LogLevel.ERROR, `Error sending welcome email to ${email}`, error as Error, { userId: user.id });
+    });
 
   res.status(201).json({
     success: true,

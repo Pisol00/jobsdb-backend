@@ -107,7 +107,7 @@ export const createWelcomeEmailTemplate = (
         </ul>
         
         <div style="text-align: center; margin: 30px 0;">
-          <a href="${CONFIG.FRONTEND_URL}/dashboard" style="background-color: #3b82f6; color: white; padding: 12px 24px; text-decoration: none; border-radius: 5px; font-weight: bold;">
+          <a href="${CONFIG.FRONTEND_URL}" style="background-color: #3b82f6; color: white; padding: 12px 24px; text-decoration: none; border-radius: 5px; font-weight: bold;">
             เริ่มต้นใช้งาน
           </a>
         </div>
