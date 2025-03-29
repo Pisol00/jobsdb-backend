@@ -68,8 +68,8 @@ export const CONFIG = {
     FROM: env.EMAIL_FROM
   },
   FRONTEND_URL: env.FRONTEND_URL,
-  OTP_EXPIRY: 10 * 60 * 1000, // 10 นาที (มิลลิวินาที)
-  TRUSTED_DEVICE_EXPIRY: 60 * 60 * 1000, // 1 ชั่วโมง (มิลลิวินาที)
+  OTP_EXPIRY: 10 * 60 * 100, // 10 นาที (มิลลิวินาที)
+  TRUSTED_DEVICE_EXPIRY: 60 * 60 * 24000, // 24 ชั่วโมง (มิลลิวินาที)
   SECURITY: {
     MAX_LOGIN_ATTEMPTS: 10, // จำนวนครั้งสูงสุดที่อนุญาตให้ล็อกอินผิด
     LOCKOUT_DURATION: 5 * 60 * 1000, // ระยะเวลาที่ล็อค (5 นาที)
