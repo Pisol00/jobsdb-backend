@@ -2,7 +2,14 @@
 import { Request, Response } from 'express';
 import { v4 as uuidv4 } from 'uuid';
 import prisma from '../../utils/prisma';
-import { comparePassword, checkTrustedDevice, checkBruteForceProtection, recordLoginAttempt, generateOTP } from '../../utils/security';
+import { 
+  comparePassword, 
+  checkTrustedDevice, 
+  checkBruteForceProtection, 
+  recordLoginAttempt, 
+  generateOTP, 
+  constantTimeCompare 
+} from '../../utils/security';
 import { generateToken, generateTempToken } from '../../utils/jwt';
 import { sendOTPEmail } from '../../utils/email';
 import { formatUserResponse } from './index';
@@ -13,10 +20,12 @@ import { LoginRequest } from '../../types/auth';
 import { logMessage, LogLevel, logAndCreateApiError } from '../../utils/errorLogger';
 
 /**
- * ล็อกอินผู้ใช้พร้อมการป้องกัน Brute Force
+ * ล็อกอินผู้ใช้พร้อมการป้องกัน Brute Force และ 2FA
+ * 
+ * @route POST /api/auth/login
  */
 export const login = asyncHandler(async (req: Request, res: Response) => {
-  const { usernameOrEmail, password, deviceId } = req.body as LoginRequest;
+  const { usernameOrEmail, password, deviceId, rememberMe = false } = req.body as LoginRequest;
 
   // ตรวจสอบข้อมูลที่จำเป็น
   if (!usernameOrEmail || !password) {
@@ -28,7 +37,7 @@ export const login = asyncHandler(async (req: Request, res: Response) => {
   
   // บันทึกข้อมูลเพื่อการ logging
   const context = {
-    ip: req.ip,
+    ip: req.ip || req.socket.remoteAddress || 'unknown',
     userAgent: req.headers['user-agent'],
     deviceId: clientDeviceId,
     usernameOrEmail
@@ -50,38 +59,37 @@ export const login = asyncHandler(async (req: Request, res: Response) => {
   } catch (error) {
     // เกิดข้อผิดพลาดในการตรวจสอบ brute force แต่ไม่ควรหยุดการทำงาน
     logMessage(LogLevel.ERROR, "Error checking brute force protection", error as Error, context);
-    // ดำเนินการต่อแม้จะเกิดข้อผิดพลาด
   }
 
   // ตรวจสอบจำนวนครั้งที่ล็อกอินผิดในช่วงเวลาที่กำหนด
-  const checkFrom = new Date(Date.now() - CONFIG.SECURITY.ATTEMPT_WINDOW);
-  
-  // สร้างเงื่อนไขการค้นหา
-  const whereConditions = [
-    {
-      ipAddress: req.ip || req.socket.remoteAddress || 'unknown',
-      isSuccess: false,
-      createdAt: { gte: checkFrom }
-    },
-    {
-      usernameOrEmail,
-      isSuccess: false, 
-      createdAt: { gte: checkFrom }
-    }
-  ];
-  
-  // เพิ่มเงื่อนไข deviceId ถ้ามีค่า
-  if (clientDeviceId) {
-    whereConditions.push({
-      deviceId: clientDeviceId,
-      isSuccess: false,
-      createdAt: { gte: checkFrom }
-    });
-  }
-  
-  // นับจำนวนครั้งที่ล็อกอินผิด
   let failedAttempts = 0;
   try {
+    const checkFrom = new Date(Date.now() - CONFIG.SECURITY.ATTEMPT_WINDOW);
+    
+    // สร้างเงื่อนไขการค้นหา
+    const whereConditions = [
+      {
+        ipAddress: req.ip || req.socket.remoteAddress || 'unknown',
+        isSuccess: false,
+        createdAt: { gte: checkFrom }
+      },
+      {
+        usernameOrEmail,
+        isSuccess: false, 
+        createdAt: { gte: checkFrom }
+      }
+    ];
+    
+    // เพิ่มเงื่อนไข deviceId ถ้ามีค่า
+    if (clientDeviceId) {
+      whereConditions.push({
+        deviceId: clientDeviceId,
+        isSuccess: false,
+        createdAt: { gte: checkFrom }
+      });
+    }
+    
+    // นับจำนวนครั้งที่ล็อกอินผิด
     failedAttempts = await prisma.loginAttempt.count({
       where: {
         OR: whereConditions
@@ -89,7 +97,6 @@ export const login = asyncHandler(async (req: Request, res: Response) => {
     });
   } catch (error) {
     logMessage(LogLevel.ERROR, "Error counting failed login attempts", error as Error, context);
-    // ดำเนินการต่อแม้จะเกิดข้อผิดพลาด โดยใช้ค่าเริ่มต้น
   }
 
   // ค้นหาผู้ใช้ตาม email หรือ username
@@ -116,7 +123,6 @@ export const login = asyncHandler(async (req: Request, res: Response) => {
       await recordLoginAttempt(usernameOrEmail, false, req);
     } catch (error) {
       logMessage(LogLevel.ERROR, "Error recording failed login attempt", error as Error, context);
-      // ดำเนินการต่อแม้จะเกิดข้อผิดพลาด
     }
     
     // คำนวณจำนวนครั้งที่เหลือ (หลังจากบันทึกความพยายามล็อกอินครั้งนี้แล้ว)
@@ -124,8 +130,9 @@ export const login = asyncHandler(async (req: Request, res: Response) => {
     
     return res.status(401).json({
       success: false,
-      message: `ชื่อผู้ใช้/อีเมล หรือรหัสผ่านไม่ถูกต้อง (เหลือโอกาสอีก ${attemptsLeft > 0 ? attemptsLeft : 0} ครั้ง)`,
-      code: "INVALID_CREDENTIALS"
+      message: `ชื่อผู้ใช้/อีเมล หรือรหัสผ่านไม่ถูกต้อง ${attemptsLeft > 0 ? `(เหลือโอกาสอีก ${attemptsLeft} ครั้ง)` : ''}`,
+      code: "INVALID_CREDENTIALS",
+      attemptsLeft: Math.max(0, attemptsLeft)
     });
   }
 
@@ -139,7 +146,6 @@ export const login = asyncHandler(async (req: Request, res: Response) => {
       await recordLoginAttempt(usernameOrEmail, false, req, user.id);
     } catch (error) {
       logMessage(LogLevel.ERROR, "Error recording failed login attempt for OAuth user", error as Error, context);
-      // ดำเนินการต่อแม้จะเกิดข้อผิดพลาด
     }
     
     // คำนวณจำนวนครั้งที่เหลือ
@@ -147,8 +153,10 @@ export const login = asyncHandler(async (req: Request, res: Response) => {
     
     return res.status(401).json({
       success: false,
-      message: `บัญชีนี้ใช้การเข้าสู่ระบบด้วย Google กรุณาใช้ปุ่ม "เข้าสู่ระบบด้วย Google" (เหลือโอกาสอีก ${attemptsLeft > 0 ? attemptsLeft : 0} ครั้ง)`,
-      code: "OAUTH_ACCOUNT"
+      message: `บัญชีนี้ใช้การเข้าสู่ระบบด้วย ${user.provider || 'Google'} กรุณาใช้ปุ่ม "เข้าสู่ระบบด้วย ${user.provider || 'Google'}"`,
+      code: "OAUTH_ACCOUNT",
+      provider: user.provider || 'google',
+      attemptsLeft: Math.max(0, attemptsLeft)
     });
   }
 
@@ -171,7 +179,6 @@ export const login = asyncHandler(async (req: Request, res: Response) => {
       await recordLoginAttempt(usernameOrEmail, false, req, user.id);
     } catch (error) {
       logMessage(LogLevel.ERROR, "Error recording failed login attempt with wrong password", error as Error, context);
-      // ดำเนินการต่อแม้จะเกิดข้อผิดพลาด
     }
     
     // คำนวณจำนวนครั้งที่เหลือ
@@ -183,16 +190,18 @@ export const login = asyncHandler(async (req: Request, res: Response) => {
       
       return res.status(429).json({
         success: false,
-        message: "บัญชีถูกล็อคชั่วคราว 5 นาที เนื่องจากคุณล็อกอินผิดหลายครั้งเกินไป",
+        message: "บัญชีถูกล็อคชั่วคราวเนื่องจากคุณล็อกอินผิดหลายครั้งเกินไป",
         code: "ACCOUNT_LOCKED",
-        lockoutRemaining: CONFIG.SECURITY.LOCKOUT_DURATION / 1000
+        lockoutRemaining: CONFIG.SECURITY.LOCKOUT_DURATION / 1000,
+        lockoutMinutes: CONFIG.SECURITY.LOCKOUT_DURATION / (60 * 1000)
       });
     }
     
     return res.status(401).json({
       success: false,
-      message: `ชื่อผู้ใช้/อีเมล หรือรหัสผ่านไม่ถูกต้อง (เหลือโอกาสอีก ${attemptsLeft} ครั้ง)`,
-      code: "INVALID_CREDENTIALS"
+      message: `ชื่อผู้ใช้/อีเมล หรือรหัสผ่านไม่ถูกต้อง ${attemptsLeft > 0 ? `(เหลือโอกาสอีก ${attemptsLeft} ครั้ง)` : ''}`,
+      code: "INVALID_CREDENTIALS",
+      attemptsLeft
     });
   }
 
@@ -201,7 +210,6 @@ export const login = asyncHandler(async (req: Request, res: Response) => {
     await recordLoginAttempt(usernameOrEmail, true, req, user.id);
   } catch (error) {
     logMessage(LogLevel.ERROR, "Error recording successful login attempt", error as Error, context);
-    // ดำเนินการต่อแม้จะเกิดข้อผิดพลาด
   }
   
   logMessage(LogLevel.INFO, `User logged in successfully`, null, context);
@@ -214,14 +222,13 @@ export const login = asyncHandler(async (req: Request, res: Response) => {
       isTrustedDevice = await checkTrustedDevice(user.id, clientDeviceId);
     } catch (error) {
       logMessage(LogLevel.ERROR, "Error checking trusted device", error as Error, context);
-      // ดำเนินการต่อแม้จะเกิดข้อผิดพลาด โดยถือว่าไม่ใช่อุปกรณ์ที่น่าเชื่อถือ
     }
 
     if (isTrustedDevice) {
       // ข้ามการยืนยัน 2FA สำหรับอุปกรณ์ที่น่าเชื่อถือ
       logMessage(LogLevel.INFO, `Skipping 2FA for trusted device`, null, context);
       
-      const token = generateToken(user, req.body.rememberMe);
+      const token = generateToken(user, rememberMe);
       return res.status(200).json({
         success: true,
         token,
@@ -250,9 +257,21 @@ export const login = asyncHandler(async (req: Request, res: Response) => {
       
       if (!emailSent) {
         logMessage(LogLevel.ERROR, `Failed to send OTP email for 2FA`, null, context);
-      } else {
-        logMessage(LogLevel.INFO, `OTP sent for 2FA`, null, context);
+        
+        // ล้าง OTP ที่สร้างไว้
+        await prisma.user.update({
+          where: { id: user.id },
+          data: {
+            twoFactorOTP: null,
+            twoFactorExpires: null,
+            lastTempToken: null,
+          },
+        });
+        
+        throw new ApiError(500, "ไม่สามารถส่งอีเมลรหัส OTP ได้ กรุณาลองใหม่อีกครั้ง", "EMAIL_SEND_FAILED");
       }
+      
+      logMessage(LogLevel.INFO, `OTP sent for 2FA`, null, context);
 
       return res.status(200).json({
         success: true,
@@ -260,8 +279,13 @@ export const login = asyncHandler(async (req: Request, res: Response) => {
         tempToken,
         expiresAt: otpExpires.getTime(),
         message: "รหัส OTP ได้ถูกส่งไปยังอีเมลของคุณ",
+        email: user.email.replace(/(.{2})(.*)(?=@)/, (_, start, rest) => start + '*'.repeat(rest.length)) // ปกปิดบางส่วนของอีเมล
       });
     } catch (error) {
+      if (error instanceof ApiError) {
+        throw error;
+      }
+      
       throw logAndCreateApiError(
         500, 
         "เกิดข้อผิดพลาดในการสร้างรหัส OTP", 
@@ -272,10 +296,18 @@ export const login = asyncHandler(async (req: Request, res: Response) => {
   }
 
   // ล็อกอินปกติ (ไม่มี 2FA)
-  const token = generateToken(user, req.body.rememberMe);
+  const token = generateToken(user, rememberMe);
+  
+  // ตรวจสอบความสมบูรณ์ของโปรไฟล์
+  const isProfileComplete = Boolean(
+    user.fullName && user.profileImage
+  );
+  
   res.status(200).json({
     success: true,
     token,
     user: formatUserResponse(user),
+    isProfileComplete,
+    lastLogin: new Date().toISOString()
   });
 });

@@ -33,16 +33,8 @@ export const createOTPEmailTemplate = (
   tempToken: string,
   fullName: string = ""
 ): string => {
-  // ตรวจสอบว่า tempToken มีค่าหรือไม่
-  if (!tempToken) {
-    console.warn("⚠️ Warning: tempToken is undefined or empty in createOTPEmailTemplate");
-    tempToken = "invalid-token";
-  }
-  
-  const expiresAt = Date.now() + CONFIG.OTP_EXPIRY;
-  const verifyOtpUrl = `${CONFIG.FRONTEND_URL}/auth/verify-otp/${tempToken}?expiresAt=${expiresAt}`;
-
-  return `
+  // สร้างพื้นฐานของเทมเพลตอีเมล
+  let emailTemplate = `
     <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; border: 1px solid #e0e0e0; border-radius: 5px;">
       <div style="text-align: center; margin-bottom: 20px;">
         <h1 style="color: #3b82f6;">JobsDB</h1>
@@ -55,13 +47,31 @@ export const createOTPEmailTemplate = (
           <div style="font-size: 28px; letter-spacing: 8px; font-weight: bold; color: #3b82f6; background-color: #e0f2fe; padding: 15px; border-radius: 5px;">${otp}</div>
         </div>
         <p>รหัสนี้จะหมดอายุใน 10 นาที</p>
-        
+  `;
+  
+  // เพิ่มปุ่มลิงก์ยืนยันเฉพาะเมื่อมี tempToken ที่ถูกต้อง
+  if (tempToken && tempToken.trim() !== "") {
+    const expiresAt = Date.now() + CONFIG.OTP_EXPIRY;
+    const verifyOtpUrl = `${CONFIG.FRONTEND_URL}/auth/verify-otp/${tempToken}?expiresAt=${expiresAt}`;
+    
+    emailTemplate += `
         <div style="text-align: center; margin: 30px 0;">
           <a href="${verifyOtpUrl}" style="background-color: #3b82f6; color: white; padding: 12px 24px; text-decoration: none; border-radius: 5px; font-weight: bold;">
             คลิกที่นี่เพื่อเข้าสู่หน้ายืนยัน
           </a>
         </div>
-        
+    `;
+  } else {
+    // แสดงคำแนะนำเพิ่มเติมกรณีไม่มีลิงก์
+    emailTemplate += `
+        <p style="margin: 30px 0; text-align: center;">
+          กรุณานำรหัส OTP ด้านบนไปกรอกในหน้ายืนยันตัวตนที่เปิดอยู่ในเบราว์เซอร์ของคุณ
+        </p>
+    `;
+  }
+  
+  // ส่วนที่เหลือของเทมเพลต
+  emailTemplate += `
         <p>หากคุณไม่ได้พยายามเข้าสู่ระบบ โปรดเพิกเฉยต่อข้อความนี้หรือติดต่อฝ่ายสนับสนุน</p>
       </div>
       <div style="margin-top: 20px; padding-top: 20px; border-top: 1px solid #e0e0e0; text-align: center; color: #666; font-size: 12px;">
@@ -69,6 +79,27 @@ export const createOTPEmailTemplate = (
       </div>
     </div>
   `;
+  
+  return emailTemplate;
+};
+
+/**
+ * ส่ง OTP ผ่านทางอีเมล
+ */
+export const sendOTPEmail = async (
+  email: string,
+  otp: string,
+  tempToken: string,
+  fullName: string = ""
+): Promise<boolean> => {
+  // ตรวจสอบความถูกต้องของ tempToken
+  if (!tempToken || tempToken.trim() === "") {
+    console.error("❌ Error: tempToken is undefined or empty in sendOTPEmail");
+    // ยังคงส่งอีเมลแต่ไม่มีลิงก์
+  }
+
+  const emailHTML = createOTPEmailTemplate(otp, tempToken, fullName);
+  return await sendEmail(email, "รหัสยืนยันตัวตนแบบสองขั้นตอน JobsDB", emailHTML);
 };
 
 /**
@@ -95,23 +126,4 @@ export const createPasswordResetEmailTemplate = (user: UserData, resetURL: strin
       </div>
     </div>
   `;
-};
-
-/**
- * ส่ง OTP ผ่านทางอีเมล
- */
-export const sendOTPEmail = async (
-  email: string,
-  otp: string,
-  tempToken: string,
-  fullName: string = ""
-): Promise<boolean> => {
-  // ตรวจสอบว่า tempToken มีค่าหรือไม่
-  if (!tempToken) {
-    console.error("⚠️ Warning: tempToken is undefined or empty in sendOTPEmail");
-    tempToken = "invalid-token";
-  }
-
-  const emailHTML = createOTPEmailTemplate(otp, tempToken, fullName);
-  return sendEmail(email, "รหัสยืนยันตัวตนแบบสองขั้นตอน JobsDB", emailHTML);
 };
