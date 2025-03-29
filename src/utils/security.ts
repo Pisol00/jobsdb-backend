@@ -147,8 +147,9 @@ export const recordLoginAttempt = async (
 };
 
 /**
- * ตรวจสอบการป้องกัน Brute Force
+ * ตรวจสอบการป้องกัน Brute Force (ปรับปรุงใหม่!)
  * ตรวจสอบว่าบัญชีหรือ IP ถูกล็อคเนื่องจากมีการล็อกอินล้มเหลวเกินจำนวนที่กำหนดหรือไม่
+ * โดยจะนับเฉพาะความพยายามล็อกอินที่ล้มเหลวหลังจากล็อกอินสำเร็จล่าสุด
  */
 export const checkBruteForceProtection = async (
   usernameOrEmail: string,
@@ -161,24 +162,7 @@ export const checkBruteForceProtection = async (
     // ตรวจสอบช่วงเวลาสำหรับการนับความพยายามล็อกอินที่ล้มเหลว
     const checkFrom = new Date(Date.now() - CONFIG.SECURITY.ATTEMPT_WINDOW);
     
-    // ค้นหาการล็อกอินล้มเหลวล่าสุด (ใช้สำหรับคำนวณระยะเวลาที่ล็อค)
-    const lastFailedAttempt = await prisma.loginAttempt.findFirst({
-      where: {
-        OR: [
-          { ipAddress, isSuccess: false },
-          { usernameOrEmail, isSuccess: false },
-          ...(deviceId ? [{ deviceId, isSuccess: false }] : [])
-        ],
-      },
-      orderBy: { createdAt: 'desc' },
-    });
-
-    // ถ้าไม่มีการล็อกอินล้มเหลว หรือการล็อกอินล้มเหลวอยู่นอกช่วงเวลาที่กำหนด
-    if (!lastFailedAttempt || lastFailedAttempt.createdAt < checkFrom) {
-      return { isLocked: false };
-    }
-
-    // ตรวจสอบว่าหลังจากล็อกอินล้มเหลวครั้งล่าสุด มีการล็อกอินสำเร็จหรือไม่
+    // ค้นหาการล็อกอินสำเร็จล่าสุด
     const lastSuccessfulAttempt = await prisma.loginAttempt.findFirst({
       where: {
         OR: [
@@ -190,18 +174,36 @@ export const checkBruteForceProtection = async (
       orderBy: { createdAt: 'desc' },
     });
 
-    // ถ้ามีการล็อกอินสำเร็จหลังจากล้มเหลวครั้งล่าสุด แสดงว่าบัญชีถูกปลดล็อคแล้ว
-    if (lastSuccessfulAttempt && lastSuccessfulAttempt.createdAt > lastFailedAttempt.createdAt) {
+    // กำหนดเวลาเริ่มต้นสำหรับการตรวจสอบ - หากมีการล็อกอินสำเร็จล่าสุด ให้นับหลังจากนั้น
+    // ไม่เช่นนั้นให้ใช้ช่วงเวลาตามที่กำหนด
+    const startCountFrom = lastSuccessfulAttempt 
+      ? lastSuccessfulAttempt.createdAt 
+      : checkFrom;
+
+    // ค้นหาความพยายามล็อกอินล้มเหลวล่าสุด (เพื่อคำนวณระยะเวลาที่ล็อค)
+    const lastFailedAttempt = await prisma.loginAttempt.findFirst({
+      where: {
+        OR: [
+          { ipAddress, isSuccess: false, createdAt: { gt: startCountFrom } },
+          { usernameOrEmail, isSuccess: false, createdAt: { gt: startCountFrom } },
+          ...(deviceId ? [{ deviceId, isSuccess: false, createdAt: { gt: startCountFrom } }] : [])
+        ],
+      },
+      orderBy: { createdAt: 'desc' },
+    });
+
+    // ถ้าไม่มีการล็อกอินล้มเหลวหลังล็อกอินสำเร็จล่าสุด
+    if (!lastFailedAttempt) {
       return { isLocked: false };
     }
 
-    // นับจำนวนการล็อกอินที่ล้มเหลวในช่วงเวลาที่กำหนด
+    // นับจำนวนการล็อกอินที่ล้มเหลวหลังจากล็อกอินสำเร็จล่าสุด
     const failedAttemptsCount = await prisma.loginAttempt.count({
       where: {
         OR: [
-          { ipAddress, isSuccess: false, createdAt: { gte: checkFrom } },
-          { usernameOrEmail, isSuccess: false, createdAt: { gte: checkFrom } },
-          ...(deviceId ? [{ deviceId, isSuccess: false, createdAt: { gte: checkFrom } }] : [])
+          { ipAddress, isSuccess: false, createdAt: { gte: startCountFrom } },
+          { usernameOrEmail, isSuccess: false, createdAt: { gte: startCountFrom } },
+          ...(deviceId ? [{ deviceId, isSuccess: false, createdAt: { gte: startCountFrom } }] : [])
         ],
       },
     });
@@ -246,12 +248,11 @@ export const checkBruteForceProtection = async (
 };
 
 /**
- * รีเซ็ตการนับความพยายามล็อกอินที่ล้มเหลว
- * เรียกใช้ฟังก์ชันนี้เมื่อผู้ใช้ล็อกอินสำเร็จ
- */
-/**
- * รีเซ็ตการนับความพยายามล็อกอินที่ล้มเหลวหลังจากล็อกอินสำเร็จ
- * เพื่อให้ผู้ใช้เริ่มต้นใหม่หมดในครั้งถัดไป
+ * รีเซ็ตการนับความพยายามล็อกอินที่ล้มเหลวหลังจากล็อกอินสำเร็จ (ปรับปรุงใหม่!)
+ * 
+ * @param usernameOrEmail อีเมลหรือชื่อผู้ใช้
+ * @param ipAddress IP address
+ * @param deviceId รหัสอุปกรณ์ (ถ้ามี)
  */
 export const resetFailedLoginAttempts = async (
   usernameOrEmail: string,
@@ -259,7 +260,7 @@ export const resetFailedLoginAttempts = async (
   deviceId?: string
 ): Promise<void> => {
   try {
-    // บันทึกการล็อกอินสำเร็จ
+    // บันทึกการล็อกอินสำเร็จ - สิ่งนี้จะใช้เป็นจุดเริ่มต้นใหม่สำหรับการนับความพยายามล็อกอินที่ล้มเหลว
     await prisma.loginAttempt.create({
       data: {
         ipAddress,

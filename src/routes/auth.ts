@@ -18,6 +18,7 @@ import {
 import { authenticateUser } from '../middleware/auth';
 import { CONFIG } from '../config/env';
 import { generateToken } from '../utils/jwt';
+import { resetFailedLoginAttempts } from '../utils/security'; // เพิ่มการนำเข้าฟังก์ชัน
 
 const router = express.Router();
 const FRONTEND_URL = CONFIG.FRONTEND_URL;

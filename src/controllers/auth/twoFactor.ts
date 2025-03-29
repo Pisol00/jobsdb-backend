@@ -2,7 +2,7 @@
 import { Request, Response } from 'express';
 import prisma from '../../utils/prisma';
 import { verifyToken, generateToken } from '../../utils/jwt';
-import { saveTrustedDevice } from '../../utils/security';
+import { saveTrustedDevice, resetFailedLoginAttempts } from '../../utils/security'; // เพิ่มการนำเข้าฟังก์ชัน
 import { formatUserResponse } from './index';
 import { VerifyOTPRequest } from '../../types/auth';
 import { asyncHandler } from '../../middleware/asyncHandler';
@@ -28,26 +28,16 @@ export const toggleTwoFactor = asyncHandler(async (req: Request, res: Response) 
     });
   }
 
-  // ล้าง OTP หลังจากใช้งาน
+  // อัปเดตสถานะ 2FA ของผู้ใช้
   await prisma.user.update({
     where: { id: user.id },
     data: {
+      twoFactorEnabled: enable,
       twoFactorOTP: null,
       twoFactorExpires: null,
     },
   });
 
-  // รีเซ็ตการนับความพยายามล็อกอินที่ล้มเหลว เมื่อยืนยัน 2FA สำเร็จ
-  await resetFailedLoginAttempts(
-    user.email,
-    req.ip || req.socket.remoteAddress || 'unknown', 
-    decoded.deviceId
-  );
-
-  // จดจำอุปกรณ์ถ้ามีการร้องขอและมี deviceId
-  if (rememberDevice && decoded.deviceId) {
-    await saveTrustedDevice(user.id, decoded.deviceId);
-  }
   // ล้างข้อมูลอุปกรณ์ที่น่าเชื่อถือถ้าปิดใช้งาน 2FA
   if (!enable) {
     await prisma.trustedDevice.deleteMany({
@@ -126,6 +116,15 @@ export const verifyOTP = asyncHandler(async (req: Request, res: Response) => {
       twoFactorExpires: null,
     },
   });
+
+  // รีเซ็ตการนับความพยายามล็อกอินที่ล้มเหลว
+  if (decoded.deviceId) {
+    await resetFailedLoginAttempts(
+      user.email,
+      req.ip || req.socket.remoteAddress || 'unknown', 
+      decoded.deviceId
+    );
+  }
 
   // จดจำอุปกรณ์ถ้ามีการร้องขอและมี deviceId
   if (rememberDevice && decoded.deviceId) {
