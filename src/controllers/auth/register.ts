@@ -9,6 +9,7 @@ import { RegisterRequest } from '../../types/auth';
 import { asyncHandler } from '../../middleware/asyncHandler';
 import { sendWelcomeEmail } from '../../utils/email';
 import { logMessage, LogLevel } from '../../utils/errorLogger';
+import { createEmailVerification } from './emailVerification';
 
 /**
  * ลงทะเบียนผู้ใช้ใหม่
@@ -65,7 +66,7 @@ export const register = asyncHandler(async (req: Request, res: Response) => {
   // เข้ารหัสรหัสผ่าน
   const hashedPassword = await hashPassword(password);
 
-  // สร้างผู้ใช้ใหม่
+  // สร้างผู้ใช้ใหม่ (อีเมลยังไม่ได้รับการยืนยัน)
   const user = await prisma.user.create({
     data: {
       username,
@@ -74,29 +75,36 @@ export const register = asyncHandler(async (req: Request, res: Response) => {
       password: hashedPassword,
       provider: "local",
       twoFactorEnabled: false,
+      isEmailVerified: false, // ยังไม่ได้ยืนยันอีเมล
     },
   });
 
-  // สร้าง token
-  const token = generateToken(user);
+  // สร้างและส่ง OTP สำหรับยืนยันอีเมล
+  const { otp, verifyToken, success: emailSent } = await createEmailVerification(user.id);
 
-  // ส่งอีเมลต้อนรับ (ไม่รอการส่งอีเมลเสร็จ)
-  sendWelcomeEmail(email, fullName, username)
-    .then(sent => {
-      if (sent) {
-        logMessage(LogLevel.INFO, `Welcome email sent to ${email}`, null, { userId: user.id });
-      } else {
-        logMessage(LogLevel.WARN, `Failed to send welcome email to ${email}`, null, { userId: user.id });
-      }
-    })
-    .catch(error => {
-      logMessage(LogLevel.ERROR, `Error sending welcome email to ${email}`, error as Error, { userId: user.id });
-    });
+  if (!emailSent) {
+    // บันทึก log กรณีส่งอีเมลไม่สำเร็จ
+    logMessage(
+      LogLevel.WARN,
+      `Failed to send verification email to ${email}`,
+      null,
+      { userId: user.id }
+    );
+  } else {
+    logMessage(
+      LogLevel.INFO,
+      `Verification email sent to ${email}`,
+      null,
+      { userId: user.id }
+    );
+  }
 
+  // ส่ง response กลับไปยังผู้ใช้
   res.status(201).json({
     success: true,
-    message: "ลงทะเบียนผู้ใช้งานเรียบร้อยแล้ว",
-    token,
+    message: "ลงทะเบียนสำเร็จ กรุณาตรวจสอบอีเมลเพื่อยืนยันบัญชีของคุณ",
+    requireEmailVerification: true,
+    tempToken: verifyToken,
     user: formatUserResponse(user),
   });
 });

@@ -12,6 +12,7 @@ export interface FormattedUser {
   email: string;
   profileImage: string | null;
   twoFactorEnabled: boolean;
+  isEmailVerified?: boolean;
 }
 
 /**
@@ -51,6 +52,14 @@ export interface VerifyOTPRequest {
   otp: string;
   tempToken: string;
   rememberDevice?: boolean;
+}
+
+/**
+ * ข้อมูลสำหรับ request การยืนยันอีเมล
+ */
+export interface VerifyEmailRequest {
+  otp: string;
+  token?: string;
 }
 
 /**

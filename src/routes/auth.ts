@@ -10,8 +10,11 @@ import {
   resetPassword,
   verifyOTP,
   toggleTwoFactor,
-  verifyTempToken
-} from '../controllers/auth'; // Fixed import path
+  verifyTempToken,
+  verifyEmailToken,
+  verifyEmailWithOTP,
+  resendEmailVerification
+} from '../controllers/auth';
 import { authenticateUser } from '../middleware/auth';
 import { CONFIG } from '../config/env';
 import { generateToken } from '../utils/jwt';
@@ -33,6 +36,11 @@ router.post('/reset-password', resetPassword);
 router.post('/verify-otp', verifyOTP);
 router.post('/toggle-two-factor', authenticateUser, toggleTwoFactor);
 router.post('/verify-temp-token', verifyTempToken);
+
+// Email verification routes
+router.post('/verify-email-token', verifyEmailToken);
+router.post('/verify-email', verifyEmailWithOTP);
+router.post('/resend-email-verification', resendEmailVerification);
 
 // Google OAuth routes
 router.get(

@@ -33,6 +33,11 @@ const envSchema = z.object({
   EMAIL_USER: z.string().min(1, 'Email User is required'),
   EMAIL_PASS: z.string().min(1, 'Email Password is required'),
   EMAIL_FROM: z.string().email().default('noreply@jobsdb.com'),
+  
+  // Account cleanup settings
+  ACCOUNT_CLEANUP_ENABLED: z.string().default('true'),
+  ACCOUNT_CLEANUP_DAYS_WARNING: z.string().default('3'),
+  ACCOUNT_CLEANUP_DAYS_DELETION: z.string().default('7'),
 });
 
 // พยายามแปลงและตรวจสอบตัวแปรสภาพแวดล้อม
@@ -69,5 +74,10 @@ export const CONFIG = {
     MAX_LOGIN_ATTEMPTS: 5, // จำนวนครั้งสูงสุดที่อนุญาตให้ล็อกอินผิด
     LOCKOUT_DURATION: 5 * 60 * 1000, // ระยะเวลาที่ล็อค (5 นาที)
     ATTEMPT_WINDOW: 30 * 60 * 1000, // ช่วงเวลาที่จะนับจำนวนครั้งที่ล็อกอินผิด (30 นาที)
+  },
+  ACCOUNT_CLEANUP: {
+    ENABLED: env.ACCOUNT_CLEANUP_ENABLED === 'true',
+    DAYS_BEFORE_WARNING: parseInt(env.ACCOUNT_CLEANUP_DAYS_WARNING, 10),
+    DAYS_BEFORE_DELETION: parseInt(env.ACCOUNT_CLEANUP_DAYS_DELETION, 10)
   }
 };

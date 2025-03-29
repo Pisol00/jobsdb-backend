@@ -1,7 +1,8 @@
 // src/utils/email.ts
 import { CONFIG } from '../config/env';
 import { UserData } from './jwt';
-import { createEmailTransporter, createWelcomeEmailTemplate } from '../config/email';
+import { createEmailTransporter } from '../config/email';
+import { createWelcomeEmailTemplate } from '../config/email';
 
 /**
  * ส่งอีเมล
@@ -126,4 +127,114 @@ export const sendWelcomeEmail = async (
 ): Promise<boolean> => {
   const emailHTML = createWelcomeEmailTemplate(fullName, username);
   return await sendEmail(email, "ยินดีต้อนรับสู่ JobsDB", emailHTML);
+};
+
+/**
+ * สร้างเทมเพลตอีเมลสำหรับการยืนยันอีเมล
+ */
+export const createEmailVerificationTemplate = (
+  otp: string,
+  verifyToken: string,
+  fullName: string = ""
+): string => {
+  const verifyUrl = `${CONFIG.FRONTEND_URL}/auth/verify-email?token=${verifyToken}`;
+  
+  return `
+    <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; border: 1px solid #e0e0e0; border-radius: 5px;">
+      <div style="text-align: center; margin-bottom: 20px;">
+        <h1 style="color: #3b82f6;">JobsDB</h1>
+        <p style="color: #666;">ยืนยันอีเมลของคุณ</p>
+      </div>
+      <div style="padding: 20px; background-color: #f9fafb; border-radius: 5px;">
+        <p>สวัสดี ${fullName || "คุณ"},</p>
+        <p>ขอบคุณที่ลงทะเบียนกับ JobsDB กรุณายืนยันอีเมลของคุณเพื่อเปิดใช้งานบัญชี</p>
+        
+        <div style="text-align: center; margin: 30px 0;">
+          <div style="background-color: #e0f2fe; padding: 15px; border-radius: 5px; margin-bottom: 20px;">
+            <p style="margin: 0; font-weight: bold;">รหัสยืนยันอีเมลของคุณคือ:</p>
+            <div style="font-size: 28px; letter-spacing: 8px; font-weight: bold; color: #3b82f6; margin-top: 10px;">${otp}</div>
+          </div>
+          
+          <p style="margin-bottom: 20px;">หรือคลิกที่ปุ่มด้านล่างเพื่อยืนยันอีเมลของคุณ:</p>
+          
+          <a href="${verifyUrl}" style="background-color: #3b82f6; color: white; padding: 12px 24px; text-decoration: none; border-radius: 5px; font-weight: bold; display: inline-block;">
+            ยืนยันอีเมลของฉัน
+          </a>
+        </div>
+        
+        <p>รหัสและลิงก์จะหมดอายุใน 10 นาที</p>
+        <p>หากคุณไม่ได้สมัครสมาชิกกับเรา โปรดเพิกเฉยต่อข้อความนี้</p>
+      </div>
+      <div style="margin-top: 20px; padding-top: 20px; border-top: 1px solid #e0e0e0; text-align: center; color: #666; font-size: 12px;">
+        <p>© ${new Date().getFullYear()} JobsDB. All rights reserved.</p>
+      </div>
+    </div>
+  `;
+};
+
+/**
+ * ส่งอีเมลยืนยันอีเมล
+ */
+export const sendEmailVerification = async (
+  email: string,
+  otp: string,
+  verifyToken: string,
+  fullName: string = ""
+): Promise<boolean> => {
+  const emailHTML = createEmailVerificationTemplate(otp, verifyToken, fullName);
+  return await sendEmail(email, "ยืนยันอีเมลของคุณ - JobsDB", emailHTML);
+};
+
+/**
+ * สร้างเทมเพลตอีเมลแจ้งเตือนก่อนลบบัญชี
+ */
+export const createAccountDeletionWarningTemplate = (
+  fullName: string = "",
+  daysRemaining: number = 3
+): string => {
+  return `
+    <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; border: 1px solid #e0e0e0; border-radius: 5px;">
+      <div style="text-align: center; margin-bottom: 20px;">
+        <h1 style="color: #d32f2f;">JobsDB</h1>
+        <p style="color: #666;">แจ้งเตือนการลบบัญชี</p>
+      </div>
+      <div style="padding: 20px; background-color: #fff4f4; border-radius: 5px; border-left: 4px solid #d32f2f;">
+        <p>สวัสดี ${fullName || "คุณ"},</p>
+        <p>เราพบว่าคุณได้สมัครสมาชิกกับ JobsDB แต่ยังไม่ได้ยืนยันอีเมลของคุณ</p>
+        
+        <p style="font-weight: bold;">บัญชีของคุณจะถูกลบในอีก ${daysRemaining} วัน หากไม่มีการยืนยันอีเมล</p>
+        
+        <p>หากคุณยังต้องการใช้บัญชีนี้ กรุณาดำเนินการดังนี้:</p>
+        <ol style="margin-bottom: 20px;">
+          <li>เข้าสู่ระบบด้วยอีเมลและรหัสผ่านของคุณที่ <a href="${CONFIG.FRONTEND_URL}/auth/login" style="color: #d32f2f;">หน้าเข้าสู่ระบบ</a></li>
+          <li>คุณจะได้รับการแจ้งเตือนให้ยืนยันอีเมล และระบบจะส่งรหัสยืนยันไปยังอีเมลของคุณ</li>
+          <li>ตรวจสอบอีเมลของคุณและป้อนรหัสยืนยันเพื่อเปิดใช้งานบัญชี</li>
+        </ol>
+        
+        <div style="text-align: center; margin: 30px 0;">
+          <a href="${CONFIG.FRONTEND_URL}/auth/login" style="background-color: #d32f2f; color: white; padding: 12px 24px; text-decoration: none; border-radius: 5px; font-weight: bold; display: inline-block;">
+            เข้าสู่ระบบเพื่อยืนยันอีเมล
+          </a>
+        </div>
+        
+        <p>หากคุณมีปัญหาในการยืนยันอีเมล หรือไม่ได้สมัครสมาชิกกับเรา กรุณาติดต่อฝ่ายสนับสนุน</p>
+      </div>
+      <div style="margin-top: 20px; padding-top: 20px; border-top: 1px solid #e0e0e0; text-align: center; color: #666; font-size: 12px;">
+        <p>© ${new Date().getFullYear()} JobsDB. All rights reserved.</p>
+        <p>หากคุณไม่ต้องการใช้บริการของเราอีกต่อไป คุณสามารถเพิกเฉยต่ออีเมลฉบับนี้ได้ บัญชีที่ไม่ได้ยืนยันจะถูกลบโดยอัตโนมัติ</p>
+      </div>
+    </div>
+  `;
+};
+
+/**
+ * ส่งอีเมลแจ้งเตือนก่อนลบบัญชี
+ */
+export const sendAccountDeletionWarningEmail = async (
+  email: string,
+  fullName: string,
+  daysRemaining: number = 3
+): Promise<boolean> => {
+  const emailHTML = createAccountDeletionWarningTemplate(fullName, daysRemaining);
+  return await sendEmail(email, `แจ้งเตือน: บัญชี JobsDB ของคุณจะถูกลบใน ${daysRemaining} วัน`, emailHTML);
 };

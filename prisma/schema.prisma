@@ -28,6 +28,11 @@ model User {
   twoFactorExpires    DateTime? @map("two_factor_expires")
   lastTempToken       String?   @map("last_temp_token") // เพิ่มฟิลด์เก็บ token ล่าสุด
   
+  // เพิ่มฟิลด์สำหรับยืนยันอีเมล
+  isEmailVerified     Boolean   @default(false) @map("is_email_verified")
+  emailVerifyToken    String?   @map("email_verify_token")
+  emailVerifyExpires  DateTime? @map("email_verify_expires")
+  
   createdAt           DateTime  @default(now()) @map("created_at")
   updatedAt           DateTime  @updatedAt @map("updated_at")
 

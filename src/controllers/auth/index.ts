@@ -5,6 +5,7 @@ export * from './register';
 export * from './login';
 export * from './password';
 export * from './twoFactor';
+export * from './emailVerification';
 
 // ฟังก์ชั่นอื่นๆ ที่ไม่ได้แยกไฟล์
 import { Request, Response } from 'express';
@@ -21,7 +22,8 @@ export const formatUserResponse = (user: any): FormattedUser => {
     fullName: user.fullName,
     email: user.email,
     profileImage: user.profileImage,
-    twoFactorEnabled: user.twoFactorEnabled
+    twoFactorEnabled: user.twoFactorEnabled,
+    isEmailVerified: user.isEmailVerified
   };
 };
 

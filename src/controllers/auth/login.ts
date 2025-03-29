@@ -11,6 +11,7 @@ import { ApiError } from '../../middleware/errorHandler';
 import { asyncHandler } from '../../middleware/asyncHandler';
 import { LoginRequest } from '../../types/auth';
 import { logMessage, LogLevel } from '../../utils/errorLogger';
+import { createEmailVerification } from './emailVerification';
 
 /**
  * ล็อกอินผู้ใช้พร้อมการป้องกัน Brute Force
@@ -165,6 +166,21 @@ export const login = asyncHandler(async (req: Request, res: Response) => {
       success: false,
       message: `ชื่อผู้ใช้/อีเมล หรือรหัสผ่านไม่ถูกต้อง (เหลือโอกาสอีก ${attemptsLeft} ครั้ง)`,
       code: "INVALID_CREDENTIALS"
+    });
+  }
+
+  // ตรวจสอบว่าอีเมลได้รับการยืนยันหรือไม่
+  if (!user.isEmailVerified) {
+    // ส่ง OTP ใหม่สำหรับการยืนยันอีเมล
+    const { verifyToken } = await createEmailVerification(user.id);
+    
+    return res.status(403).json({
+      success: false,
+      message: "บัญชีของคุณยังไม่ได้ยืนยันอีเมล กรุณาตรวจสอบอีเมลของคุณหรือขอรหัสยืนยันใหม่",
+      code: "EMAIL_NOT_VERIFIED",
+      requireEmailVerification: true,
+      tempToken: verifyToken,
+      user: formatUserResponse(user)
     });
   }
 
