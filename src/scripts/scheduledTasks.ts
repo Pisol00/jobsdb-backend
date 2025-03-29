@@ -10,7 +10,7 @@ import { CONFIG } from '../config/env';
  * ค่าเริ่มต้น: ทำงานทุกวันเวลา 03:00 น.
  */
 export const setupAccountCleanupJob = (
-  cronTime: string = '0 3 * * *',
+  cronTime: string = '0 0 * * *',
   daysBeforeWarning: number = CONFIG.ACCOUNT_CLEANUP.DAYS_BEFORE_WARNING,
   daysBeforeDeletion: number = CONFIG.ACCOUNT_CLEANUP.DAYS_BEFORE_DELETION,
   sendWarningEmails: boolean = true
