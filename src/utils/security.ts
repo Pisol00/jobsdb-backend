@@ -41,6 +41,11 @@ export const comparePassword = async (
  * ตรวจสอบว่าอุปกรณ์เป็นที่น่าเชื่อถือสำหรับผู้ใช้หรือไม่
  */
 export const checkTrustedDevice = async (userId: string, deviceId: string): Promise<boolean> => {
+  // ถ้าไม่มี deviceId ให้ถือว่าไม่ใช่อุปกรณ์ที่น่าเชื่อถือ
+  if (!deviceId) {
+    return false;
+  }
+  
   const trustedDevice = await prisma.trustedDevice.findFirst({
     where: {
       userId,
@@ -58,6 +63,11 @@ export const checkTrustedDevice = async (userId: string, deviceId: string): Prom
  * บันทึกอุปกรณ์เป็นที่น่าเชื่อถือสำหรับผู้ใช้
  */
 export const saveTrustedDevice = async (userId: string, deviceId: string) => {
+  // ถ้าไม่มี deviceId ให้ return เลย
+  if (!deviceId) {
+    return null;
+  }
+  
   const expiresAt = new Date(Date.now() + CONFIG.TRUSTED_DEVICE_EXPIRY);
 
   const existingDevice = await prisma.trustedDevice.findFirst({
@@ -126,26 +136,33 @@ export const checkBruteForceProtection = async (
     // คำนวณช่วงเวลาที่จะตรวจสอบ
     const checkFrom = new Date(Date.now() - CONFIG.SECURITY.ATTEMPT_WINDOW);
     
+    // สร้างเงื่อนไขสำหรับการค้นหา
+    const whereConditions = [
+      {
+        ipAddress,
+        isSuccess: false,
+        createdAt: { gte: checkFrom }
+      },
+      {
+        usernameOrEmail,
+        isSuccess: false, 
+        createdAt: { gte: checkFrom }
+      }
+    ];
+    
+    // เพิ่มเงื่อนไข deviceId หากมีค่า
+    if (deviceId) {
+      whereConditions.push({
+        deviceId,
+        isSuccess: false,
+        createdAt: { gte: checkFrom }
+      });
+    }
+    
     // ตรวจสอบจำนวนครั้งที่ล็อกอินผิดในช่วงเวลาที่กำหนด
     const failedAttempts = await prisma.loginAttempt.count({
       where: {
-        OR: [
-          {
-            ipAddress,
-            isSuccess: false,
-            createdAt: { gte: checkFrom }
-          },
-          {
-            usernameOrEmail,
-            isSuccess: false, 
-            createdAt: { gte: checkFrom }
-          },
-          {
-            deviceId,
-            isSuccess: false,
-            createdAt: { gte: checkFrom }
-          }
-        ]
+        OR: whereConditions
       }
     });
     
@@ -154,14 +171,28 @@ export const checkBruteForceProtection = async (
       return { isLocked: false };
     }
     
+    // สร้างเงื่อนไขสำหรับการค้นหาล็อกอินสำเร็จและล้มเหลวล่าสุด
+    const successConditions = [];
+    const failedConditions = [];
+    
+    // เพิ่มเงื่อนไข IP
+    successConditions.push({ ipAddress, isSuccess: true });
+    failedConditions.push({ ipAddress, isSuccess: false });
+    
+    // เพิ่มเงื่อนไข usernameOrEmail
+    successConditions.push({ usernameOrEmail, isSuccess: true });
+    failedConditions.push({ usernameOrEmail, isSuccess: false });
+    
+    // เพิ่มเงื่อนไข deviceId หากมีค่า
+    if (deviceId) {
+      successConditions.push({ deviceId, isSuccess: true });
+      failedConditions.push({ deviceId, isSuccess: false });
+    }
+    
     // ตรวจสอบการล็อกอินสำเร็จล่าสุด
     const lastSuccessfulLogin = await prisma.loginAttempt.findFirst({
       where: {
-        OR: [
-          { ipAddress, isSuccess: true },
-          { usernameOrEmail, isSuccess: true },
-          { deviceId, isSuccess: true }
-        ]
+        OR: successConditions
       },
       orderBy: { createdAt: 'desc' }
     });
@@ -169,11 +200,7 @@ export const checkBruteForceProtection = async (
     // ตรวจสอบการล็อกอินผิดล่าสุด
     const lastFailedLogin = await prisma.loginAttempt.findFirst({
       where: {
-        OR: [
-          { ipAddress, isSuccess: false },
-          { usernameOrEmail, isSuccess: false },
-          { deviceId, isSuccess: false }
-        ]
+        OR: failedConditions
       },
       orderBy: { createdAt: 'desc' }
     });

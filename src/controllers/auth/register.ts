@@ -1,11 +1,11 @@
 // src/controllers/auth/register.ts
 import { Request, Response } from 'express';
-import prisma from '../../utils/prisma';
-import { hashPassword } from '../../utils/security';
-import { validateUsername, validatePassword, validateEmail } from '../../utils/validation';
-import { generateToken } from '../../utils/jwt';
+import prisma from '../../../utils/prisma';
+import { hashPassword } from '../../../utils/security';
+import { validateUsername, validatePassword, validateEmail } from '../../../utils/validation';
+import { generateToken } from '../../../utils/jwt';
 import { formatUserResponse } from './index';
-import { RegisterRequest } from '../../types/auth';
+import { RegisterRequest } from '../../../types/auth';
 
 /**
  * ลงทะเบียนผู้ใช้ใหม่

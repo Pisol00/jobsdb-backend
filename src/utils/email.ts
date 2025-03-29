@@ -1,22 +1,7 @@
 // src/utils/email.ts
-import nodemailer from 'nodemailer';
 import { CONFIG } from '../config/env';
 import { UserData } from './jwt';
-
-/**
- * สร้าง nodemailer transporter
- */
-const createEmailTransporter = () => {
-  return nodemailer.createTransport({
-    host: CONFIG.EMAIL.HOST,
-    port: CONFIG.EMAIL.PORT,
-    secure: CONFIG.EMAIL.PORT === 465,
-    auth: {
-      user: CONFIG.EMAIL.USER,
-      pass: CONFIG.EMAIL.PASS,
-    },
-  });
-};
+import { createEmailTransporter } from '../config/email';
 
 /**
  * ส่งอีเมล
@@ -48,6 +33,12 @@ export const createOTPEmailTemplate = (
   tempToken: string,
   fullName: string = ""
 ): string => {
+  // ตรวจสอบว่า tempToken มีค่าหรือไม่
+  if (!tempToken) {
+    console.warn("⚠️ Warning: tempToken is undefined or empty in createOTPEmailTemplate");
+    tempToken = "invalid-token";
+  }
+  
   const expiresAt = Date.now() + CONFIG.OTP_EXPIRY;
   const verifyOtpUrl = `${CONFIG.FRONTEND_URL}/auth/verify-otp/${tempToken}?expiresAt=${expiresAt}`;
 
@@ -115,6 +106,7 @@ export const sendOTPEmail = async (
   tempToken: string,
   fullName: string = ""
 ): Promise<boolean> => {
+  // ตรวจสอบว่า tempToken มีค่าหรือไม่
   if (!tempToken) {
     console.error("⚠️ Warning: tempToken is undefined or empty in sendOTPEmail");
     tempToken = "invalid-token";

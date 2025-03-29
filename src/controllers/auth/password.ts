@@ -1,12 +1,12 @@
 // src/controllers/auth/password.ts
 import { Request, Response } from 'express';
 import crypto from 'crypto';
-import prisma from '../../utils/prisma';
-import { hashPassword } from '../../utils/security';
-import { validatePassword } from '../../utils/validation';
-import { sendEmail, createPasswordResetEmailTemplate } from '../../utils/email';
-import { CONFIG } from '../../config/env';
-import { ResetPasswordRequest } from '../../types/auth';
+import prisma from '../../../utils/prisma';
+import { hashPassword } from '../../../utils/security';
+import { validatePassword } from '../../../utils/validation';
+import { sendEmail, createPasswordResetEmailTemplate } from '../../../utils/email';
+import { CONFIG } from '../../env';
+import { ResetPasswordRequest } from '../../../types/auth';
 
 /**
  * เริ่มกระบวนการลืมรหัสผ่าน
