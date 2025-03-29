@@ -3,7 +3,7 @@ import passport from 'passport';
 import { Strategy as GoogleStrategy } from 'passport-google-oauth20';
 import prisma from '../utils/prisma';
 import { env } from './env';
-import { generateUsername } from './controllers/auth/register';
+import { generateUsername } from '../controllers/auth/register'; 
 
 // Google OAuth Strategy
 passport.use(
@@ -61,7 +61,6 @@ passport.use(
             // สร้าง username จากชื่อของผู้ใช้
             const displayName = profile.displayName || 
                                `${profile.name?.givenName || ''}${profile.name?.familyName || ''}`.trim();
-            // แก้ไข: ต้องรอให้ generateUsername ทำงานเสร็จก่อน
             try {
               const generatedUsername = await generateUsername(displayName || email.split('@')[0]);
               

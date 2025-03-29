@@ -9,6 +9,7 @@ export * from './twoFactor';
 // ฟังก์ชั่นอื่นๆ ที่ไม่ได้แยกไฟล์
 import { Request, Response } from 'express';
 import { FormattedUser } from '../../types/auth';
+import { asyncHandler } from '../../middleware/asyncHandler';
 
 /**
  * ฟอร์แมตผู้ใช้สำหรับการตอบกลับ (ลบข้อมูลที่ละเอียดอ่อน)
@@ -27,26 +28,18 @@ export const formatUserResponse = (user: any): FormattedUser => {
 /**
  * ดึงข้อมูลผู้ใช้ปัจจุบัน
  */
-export const getCurrentUser = async (req: Request, res: Response) => {
-  try {
-    const user = req.user;
-    
-    if (!user) {
-      return res.status(401).json({
-        success: false,
-        message: 'ไม่พบข้อมูลผู้ใช้',
-      });
-    }
-    
-    res.status(200).json({
-      success: true,
-      user: formatUserResponse(user),
-    });
-  } catch (error) {
-    console.error("❌ Get current user error:", error);
-    res.status(500).json({
+export const getCurrentUser = asyncHandler(async (req: Request, res: Response) => {
+  const user = req.user;
+  
+  if (!user) {
+    return res.status(401).json({
       success: false,
-      message: 'เกิดข้อผิดพลาด กรุณาลองใหม่อีกครั้ง',
+      message: 'ไม่พบข้อมูลผู้ใช้',
     });
   }
-};
+  
+  res.status(200).json({
+    success: true,
+    user: formatUserResponse(user),
+  });
+});

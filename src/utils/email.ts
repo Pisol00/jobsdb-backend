@@ -113,5 +113,5 @@ export const sendOTPEmail = async (
   }
 
   const emailHTML = createOTPEmailTemplate(otp, tempToken, fullName);
-  return sendEmail(email, "รหัสยืนยันตัวตนแบบสองขั้นตอน JobsDB", emailHTML);
+  return await sendEmail(email, "รหัสยืนยันตัวตนแบบสองขั้นตอน JobsDB", emailHTML);
 };
