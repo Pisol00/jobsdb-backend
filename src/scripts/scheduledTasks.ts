@@ -28,6 +28,12 @@ export const setupAccountCleanupJob = (
           return;
         }
         
+        // ตรวจสอบว่าการล้างบัญชีเปิดใช้งานหรือไม่
+        if (!CONFIG.ACCOUNT_CLEANUP.ENABLED) {
+          logMessage(LogLevel.INFO, 'Account cleanup is disabled in config, skipping');
+          return;
+        }
+        
         // ดำเนินการล้างบัญชี
         const result = await cleanupUnverifiedAccounts(
           daysBeforeWarning,

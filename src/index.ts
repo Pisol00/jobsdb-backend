@@ -6,6 +6,7 @@ import authRoutes from './routes/auth';
 import prisma, { testConnection } from './utils/prisma';
 import { env } from './config/env';
 import { errorHandler, notFound } from './middleware/errorHandler';
+import { startAllScheduledTasks } from './scripts/scheduledTasks';
 
 // Initialize Express app
 const app: Express = express();
@@ -46,6 +47,14 @@ const startServer = async () => {
     // Start server
     app.listen(port, () => {
       console.log(`✅ Server is running at http://localhost:${port}`);
+      
+      // Start scheduled tasks if enabled
+      if (env.ACCOUNT_CLEANUP_ENABLED === 'true') {
+        console.log('✅ Starting scheduled account cleanup tasks');
+        startAllScheduledTasks();
+      } else {
+        console.log('ℹ️ Scheduled account cleanup is disabled');
+      }
     });
   } catch (error) {
     console.error('❌ Failed to start server:', error);

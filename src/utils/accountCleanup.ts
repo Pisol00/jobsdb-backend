@@ -1,4 +1,4 @@
-// src/utils/cleanup.ts
+// src/utils/accountCleanup.ts
 import prisma from './prisma';
 import { CONFIG } from '../config/env';
 import { sendAccountDeletionWarningEmail } from './email';
@@ -28,6 +28,7 @@ export const cleanupUnverifiedAccounts = async (
     
     // ค้นหาและส่งอีเมลแจ้งเตือนบัญชีที่ใกล้ถูกลบ
     if (sendWarningEmails) {
+      // ค้นหาบัญชีที่ยังไม่ยืนยันและอยู่ในช่วงที่ควรส่งคำเตือน
       const accountsToWarn = await prisma.user.findMany({
         where: {
           isEmailVerified: false,
@@ -35,11 +36,15 @@ export const cleanupUnverifiedAccounts = async (
             lte: warningDate,
             gt: deletionDate
           },
-          // ตรวจสอบว่าไม่เคยส่งอีเมลแจ้งเตือนในวันนี้
-          // (ควรเพิ่มฟิลด์ lastWarningEmailSentAt ในฐานข้อมูล)
-          // lastWarningEmailSentAt: {
-          //   lt: new Date(new Date().setHours(0, 0, 0, 0))
-          // }
+          // ตรวจสอบว่าไม่เคยส่งอีเมลแจ้งเตือนในวันนี้หรือไม่เคยส่งเลย
+          OR: [
+            { lastWarningEmailSentAt: null },
+            {
+              lastWarningEmailSentAt: {
+                lt: new Date(new Date().setHours(0, 0, 0, 0))
+              }
+            }
+          ]
         }
       });
       
@@ -55,11 +60,11 @@ export const cleanupUnverifiedAccounts = async (
           if (emailSent) {
             warningEmailsSent++;
             
-            // บันทึกเวลาการส่งอีเมลล่าสุด (ต้องเพิ่มฟิลด์นี้ในฐานข้อมูล)
-            // await prisma.user.update({
-            //   where: { id: user.id },
-            //   data: { lastWarningEmailSentAt: new Date() }
-            // });
+            // บันทึกเวลาการส่งอีเมลล่าสุด
+            await prisma.user.update({
+              where: { id: user.id },
+              data: { lastWarningEmailSentAt: new Date() }
+            });
             
             logMessage(
               LogLevel.INFO,

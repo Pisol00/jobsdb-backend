@@ -195,33 +195,38 @@ export const createAccountDeletionWarningTemplate = (
   return `
     <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; border: 1px solid #e0e0e0; border-radius: 5px;">
       <div style="text-align: center; margin-bottom: 20px;">
-        <h1 style="color: #d32f2f;">JobsDB</h1>
+        <h1 style="color: #3b82f6;">JobsDB</h1>
         <p style="color: #666;">แจ้งเตือนการลบบัญชี</p>
       </div>
-      <div style="padding: 20px; background-color: #fff4f4; border-radius: 5px; border-left: 4px solid #d32f2f;">
-        <p>สวัสดี ${fullName || "คุณ"},</p>
+      
+      <div style="padding: 20px; background-color: #f9fafb; border-radius: 5px;">
+        <div style="background-color: #fee2e2; border-left: 4px solid #ef4444; padding: 15px; margin-bottom: 20px; border-radius: 5px;">
+          <p style="color: #b91c1c; font-weight: bold; margin: 0;">บัญชีของคุณจะถูกลบในอีก ${daysRemaining} วัน หากไม่มีการยืนยันอีเมล</p>
+        </div>
+        
+        <p>สวัสดี ${fullName || 'คุณ'},</p>
         <p>เราพบว่าคุณได้สมัครสมาชิกกับ JobsDB แต่ยังไม่ได้ยืนยันอีเมลของคุณ</p>
         
-        <p style="font-weight: bold;">บัญชีของคุณจะถูกลบในอีก ${daysRemaining} วัน หากไม่มีการยืนยันอีเมล</p>
-        
         <p>หากคุณยังต้องการใช้บัญชีนี้ กรุณาดำเนินการดังนี้:</p>
-        <ol style="margin-bottom: 20px;">
-          <li>เข้าสู่ระบบด้วยอีเมลและรหัสผ่านของคุณที่ <a href="${CONFIG.FRONTEND_URL}/auth/login" style="color: #d32f2f;">หน้าเข้าสู่ระบบ</a></li>
-          <li>คุณจะได้รับการแจ้งเตือนให้ยืนยันอีเมล และระบบจะส่งรหัสยืนยันไปยังอีเมลของคุณ</li>
-          <li>ตรวจสอบอีเมลของคุณและป้อนรหัสยืนยันเพื่อเปิดใช้งานบัญชี</li>
-        </ol>
+        <div style="margin: 20px 0; padding: 15px; background-color: #e0f2fe; border-radius: 5px;">
+          <ol style="margin: 0 0 0 20px; padding: 0;">
+            <li style="margin-bottom: 8px;">เข้าสู่ระบบด้วยอีเมลและรหัสผ่านของคุณ</li>
+            <li style="margin-bottom: 8px;">ระบบจะส่งรหัสยืนยันไปยังอีเมลของคุณ</li>
+            <li>กรอกรหัสยืนยันเพื่อเปิดใช้งานบัญชี</li>
+          </ol>
+        </div>
         
         <div style="text-align: center; margin: 30px 0;">
-          <a href="${CONFIG.FRONTEND_URL}/auth/login" style="background-color: #d32f2f; color: white; padding: 12px 24px; text-decoration: none; border-radius: 5px; font-weight: bold; display: inline-block;">
+          <a href="${CONFIG.FRONTEND_URL}/auth/login" style="background-color: #ef4444; color: white; padding: 12px 24px; text-decoration: none; border-radius: 5px; font-weight: bold; display: inline-block;">
             เข้าสู่ระบบเพื่อยืนยันอีเมล
           </a>
         </div>
         
-        <p>หากคุณมีปัญหาในการยืนยันอีเมล หรือไม่ได้สมัครสมาชิกกับเรา กรุณาติดต่อฝ่ายสนับสนุน</p>
+        <p>หากคุณไม่ต้องการใช้บริการของเราอีกต่อไป คุณสามารถเพิกเฉยต่ออีเมลฉบับนี้ได้ บัญชีที่ไม่ได้ยืนยันจะถูกลบโดยอัตโนมัติ</p>
       </div>
+      
       <div style="margin-top: 20px; padding-top: 20px; border-top: 1px solid #e0e0e0; text-align: center; color: #666; font-size: 12px;">
         <p>© ${new Date().getFullYear()} JobsDB. All rights reserved.</p>
-        <p>หากคุณไม่ต้องการใช้บริการของเราอีกต่อไป คุณสามารถเพิกเฉยต่ออีเมลฉบับนี้ได้ บัญชีที่ไม่ได้ยืนยันจะถูกลบโดยอัตโนมัติ</p>
       </div>
     </div>
   `;
