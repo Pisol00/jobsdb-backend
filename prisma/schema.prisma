@@ -13,18 +13,69 @@ datasource db {
 model User {
   id                  String    @id @default(uuid())
   username            String    @unique
-  fullName            String?   @map("full_name")  // เปลี่ยนเป็น optional (มี ? ต่อท้าย)
+  fullName            String?   @map("full_name")
   email               String    @unique
   password            String?
   profileImage        String?   @map("profile_image")
   provider            String?
   providerId          String?   @map("provider_id")
-  resetPasswordToken  String?   @map("reset_password_token")  // เพิ่มฟิลด์สำหรับ reset token
-  resetPasswordExpires DateTime? @map("reset_password_expires") // เพิ่มฟิลด์สำหรับเวลาหมดอายุของ token
+  resetPasswordToken  String?   @map("reset_password_token")
+  resetPasswordExpires DateTime? @map("reset_password_expires")
+  
+  // เพิ่มฟิลด์สำหรับ 2FA
+  twoFactorEnabled    Boolean   @default(false) @map("two_factor_enabled")
+  twoFactorOTP        String?   @map("two_factor_otp") 
+  twoFactorExpires    DateTime? @map("two_factor_expires")
+  lastTempToken       String?   @map("last_temp_token") // เพิ่มฟิลด์เก็บ token ล่าสุด
+  
   createdAt           DateTime  @default(now()) @map("created_at")
   updatedAt           DateTime  @updatedAt @map("updated_at")
 
+  // ความสัมพันธ์กับ TrustedDevice
+  trustedDevices      TrustedDevice[]
+  // เพิ่มความสัมพันธ์กับ LoginAttempt
+  loginAttempts       LoginAttempt[]
+
   @@map("users")
+}
+
+model TrustedDevice {
+  id                String   @id @default(uuid())
+  userId            String   @map("user_id")
+  deviceId          String   @map("device_id")
+  expiresAt         DateTime @map("expires_at")
+  createdAt         DateTime @default(now()) @map("created_at")
+  
+  // ความสัมพันธ์กับ User
+  user              User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  @@unique([userId, deviceId])
+  @@map("trusted_devices")
+}
+
+// เพิ่ม model ใหม่สำหรับบันทึกการพยายามล็อกอิน
+model LoginAttempt {
+  id               String    @id @default(uuid())
+  ipAddress        String
+  usernameOrEmail  String
+  isSuccess        Boolean   @default(false)
+  deviceId         String?
+  userAgent        String?
+  userId           String?   @map("user_id")
+  
+  // ความสัมพันธ์กับ User (optional)
+  user             User?     @relation(fields: [userId], references: [id], onDelete: SetNull)
+  
+  // เก็บข้อมูลเวลา
+  createdAt        DateTime  @default(now()) @map("created_at")
+  
+  // สร้าง indexes เพื่อเพิ่มประสิทธิภาพในการค้นหา
+  @@index([ipAddress, createdAt])
+  @@index([usernameOrEmail, createdAt])
+  @@index([deviceId, createdAt])
+  @@index([userId, createdAt])
+  
+  @@map("login_attempts")
 }
 
 model Job {
