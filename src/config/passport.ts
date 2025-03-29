@@ -4,6 +4,8 @@ import { Strategy as GoogleStrategy } from 'passport-google-oauth20';
 import prisma from '../utils/prisma';
 import { env } from './env';
 import { generateUsername } from '../controllers/auth/register'; 
+import { sendWelcomeEmail } from '../utils/email';
+import { logMessage, LogLevel } from '../utils/errorLogger';
 
 // Google OAuth Strategy
 passport.use(
@@ -64,17 +66,35 @@ passport.use(
             try {
               const generatedUsername = await generateUsername(displayName || email.split('@')[0]);
               
+              // เตรียมข้อมูลผู้ใช้
+              const fullName = profile.displayName || 
+                              `${profile.name?.givenName || ''} ${profile.name?.familyName || ''}`.trim();
+              
               // สร้างผู้ใช้ใหม่
               user = await prisma.user.create({
                 data: {
                   username: generatedUsername,
                   email,
-                  fullName: profile.displayName || `${profile.name?.givenName || ''} ${profile.name?.familyName || ''}`.trim(),
+                  fullName: fullName,
                   provider: 'google',
                   providerId: profile.id,
                   profileImage: profile.photos?.[0]?.value || null,
                 },
               });
+              
+              // ส่งอีเมลต้อนรับสำหรับผู้ใช้ที่ลงทะเบียนผ่าน Google ครั้งแรก
+              sendWelcomeEmail(email, fullName, generatedUsername)
+                .then(sent => {
+                  if (sent) {
+                    logMessage(LogLevel.INFO, `Welcome email sent to Google user ${email}`, null, { userId: user?.id });
+                  } else {
+                    logMessage(LogLevel.WARN, `Failed to send welcome email to Google user ${email}`, null, { userId: user?.id });
+                  }
+                })
+                .catch(error => {
+                  logMessage(LogLevel.ERROR, `Error sending welcome email to Google user ${email}`, error as Error, { userId: user?.id });
+                });
+              
             } catch (error) {
               return done(new Error(`ไม่สามารถสร้าง username ได้: ${error.message}`));
             }
