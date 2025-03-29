@@ -39,25 +39,33 @@ export const login = async (req: Request, res: Response) => {
 
     // ตรวจสอบจำนวนครั้งที่ล็อกอินผิดในช่วงเวลาที่กำหนด
     const checkFrom = new Date(Date.now() - CONFIG.SECURITY.ATTEMPT_WINDOW);
+    
+    // สร้างเงื่อนไขการค้นหา (แก้ไขเพื่อป้องกัน deviceId undefined)
+    const whereConditions = [
+      {
+        ipAddress: req.ip || req.socket.remoteAddress || 'unknown',
+        isSuccess: false,
+        createdAt: { gte: checkFrom }
+      },
+      {
+        usernameOrEmail,
+        isSuccess: false, 
+        createdAt: { gte: checkFrom }
+      }
+    ];
+    
+    // เพิ่มเงื่อนไข deviceId ถ้ามีค่า
+    if (clientDeviceId) {
+      whereConditions.push({
+        deviceId: clientDeviceId,
+        isSuccess: false,
+        createdAt: { gte: checkFrom }
+      });
+    }
+    
     const failedAttempts = await prisma.loginAttempt.count({
       where: {
-        OR: [
-          {
-            ipAddress: req.ip || req.socket.remoteAddress || 'unknown',
-            isSuccess: false,
-            createdAt: { gte: checkFrom }
-          },
-          {
-            usernameOrEmail,
-            isSuccess: false, 
-            createdAt: { gte: checkFrom }
-          },
-          {
-            deviceId: clientDeviceId,
-            isSuccess: false,
-            createdAt: { gte: checkFrom }
-          }
-        ]
+        OR: whereConditions
       }
     });
 

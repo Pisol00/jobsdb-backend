@@ -123,7 +123,7 @@ export const verifyOTP = async (req: Request, res: Response) => {
       },
     });
 
-    // จดจำอุปกรณ์ถ้ามีการร้องขอ
+    // จดจำอุปกรณ์ถ้ามีการร้องขอและมี deviceId
     if (rememberDevice && decoded.deviceId) {
       await saveTrustedDevice(user.id, decoded.deviceId);
     }

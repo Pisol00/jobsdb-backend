@@ -61,19 +61,24 @@ passport.use(
             // สร้าง username จากชื่อของผู้ใช้
             const displayName = profile.displayName || 
                                `${profile.name?.givenName || ''}${profile.name?.familyName || ''}`.trim();
-            const username = await generateUsername(displayName || email.split('@')[0]);
-            
-            // สร้างผู้ใช้ใหม่
-            user = await prisma.user.create({
-              data: {
-                username,
-                email,
-                fullName: profile.displayName || `${profile.name?.givenName || ''} ${profile.name?.familyName || ''}`.trim(),
-                provider: 'google',
-                providerId: profile.id,
-                profileImage: profile.photos?.[0]?.value || null,
-              },
-            });
+            // แก้ไข: ต้องรอให้ generateUsername ทำงานเสร็จก่อน
+            try {
+              const generatedUsername = await generateUsername(displayName || email.split('@')[0]);
+              
+              // สร้างผู้ใช้ใหม่
+              user = await prisma.user.create({
+                data: {
+                  username: generatedUsername,
+                  email,
+                  fullName: profile.displayName || `${profile.name?.givenName || ''} ${profile.name?.familyName || ''}`.trim(),
+                  provider: 'google',
+                  providerId: profile.id,
+                  profileImage: profile.photos?.[0]?.value || null,
+                },
+              });
+            } catch (error) {
+              return done(new Error(`ไม่สามารถสร้าง username ได้: ${error.message}`));
+            }
           }
         }
 
