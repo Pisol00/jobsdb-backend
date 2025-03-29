@@ -8,7 +8,7 @@ export * from './twoFactor';
 
 // ฟังก์ชั่นอื่นๆ ที่ไม่ได้แยกไฟล์
 import { Request, Response } from 'express';
-import { FormattedUser } from '../../../types/auth';
+import { FormattedUser } from '../../types/auth';
 
 /**
  * ฟอร์แมตผู้ใช้สำหรับการตอบกลับ (ลบข้อมูลที่ละเอียดอ่อน)

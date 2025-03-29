@@ -1,16 +1,16 @@
 // src/controllers/auth/login.ts
 import { Request, Response } from 'express';
 import { v4 as uuidv4 } from 'uuid';
-import prisma from '../../../utils/prisma';
-import { comparePassword, checkTrustedDevice, checkBruteForceProtection, recordLoginAttempt, generateOTP } from '../../../utils/security';
-import { generateToken, generateTempToken } from '../../../utils/jwt';
-import { sendOTPEmail } from '../../../utils/email';
+import prisma from '../../utils/prisma';
+import { comparePassword, checkTrustedDevice, checkBruteForceProtection, recordLoginAttempt, generateOTP } from '../../utils/security';
+import { generateToken, generateTempToken } from '../../utils/jwt';
+import { sendOTPEmail } from '../../utils/email';
 import { formatUserResponse } from './index';
-import { CONFIG } from '../../env';
-import { ApiError } from '../../../middleware/errorHandler';
-import { asyncHandler } from '../../../middleware/asyncHandler';
-import { LoginRequest } from '../../../types/auth';
-import { logMessage, LogLevel, logAndCreateApiError } from '../../../utils/errorLogger';
+import { CONFIG } from '../../config/env';
+import { ApiError } from '../../middleware/errorHandler';
+import { asyncHandler } from '../../middleware/asyncHandler';
+import { LoginRequest } from '../../types/auth';
+import { logMessage, LogLevel, logAndCreateApiError } from '../../utils/errorLogger';
 
 /**
  * ล็อกอินผู้ใช้พร้อมการป้องกัน Brute Force
