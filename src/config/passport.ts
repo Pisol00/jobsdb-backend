@@ -1,63 +1,22 @@
+// src/config/passport.ts
 import passport from 'passport';
 import { Strategy as GoogleStrategy } from 'passport-google-oauth20';
 import prisma from '../utils/prisma';
-import dotenv from 'dotenv';
-
-dotenv.config();
-
-// สร้างฟังก์ชัน generate username
-const generateUsername = async (baseName: string): Promise<string> => {
-  // ลบอักขระที่ไม่ได้รับอนุญาตและแทนที่ช่องว่างด้วย underscore
-  let username = baseName
-    .toLowerCase()
-    .replace(/[^a-z0-9_]/g, '')
-    .replace(/\s+/g, '_');
-  
-  // ตัด username ให้สั้นลงหากยาวเกินไป
-  if (username.length > 15) {
-    username = username.substring(0, 15);
-  }
-  
-  // เพิ่มความยาวหากสั้นเกินไป
-  if (username.length < 3) {
-    username = username + 'user';
-  }
-  
-  // ตรวจสอบว่า username นี้มีอยู่แล้วหรือไม่
-  const existingUser = await prisma.user.findUnique({
-    where: { username },
-  });
-  
-  if (!existingUser) {
-    return username;
-  }
-  
-  // หากมีอยู่แล้ว ให้เพิ่มตัวเลขต่อท้าย
-  let counter = 1;
-  let newUsername = `${username}${counter}`;
-  
-  while (true) {
-    const existingUser = await prisma.user.findUnique({
-      where: { username: newUsername },
-    });
-    
-    if (!existingUser) {
-      return newUsername;
-    }
-    
-    counter++;
-    newUsername = `${username}${counter}`;
-  }
-};
+import { env } from './env';
+import { generateUsername } from '../controllers/auth/register';
 
 // Google OAuth Strategy
 passport.use(
   new GoogleStrategy(
     {
-      clientID: process.env.GOOGLE_CLIENT_ID as string,
-      clientSecret: process.env.GOOGLE_CLIENT_SECRET as string,
-      callbackURL: process.env.GOOGLE_CALLBACK_URL as string,
+      clientID: env.GOOGLE_CLIENT_ID,
+      clientSecret: env.GOOGLE_CLIENT_SECRET,
+      callbackURL: env.GOOGLE_CALLBACK_URL,
       scope: ['profile', 'email'],
+<<<<<<< Updated upstream
+=======
+      passReqToCallback: true, // ส่ง request object ให้กับ callback
+>>>>>>> Stashed changes
     },
     async (accessToken, refreshToken, profile, done) => {
       try {

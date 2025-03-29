@@ -1,14 +1,19 @@
+// src/utils/prisma.ts
 import { PrismaClient } from '@prisma/client';
 
-// สร้าง Prisma client instance แบบ global
-const globalForPrisma = global as unknown as { prisma: PrismaClient };
+// สร้าง PrismaClient instance
+const prisma = new PrismaClient();
 
-export const prisma =
-  globalForPrisma.prisma ||
-  new PrismaClient({
-    log: ['query', 'info', 'warn', 'error'],
-  });
-
-if (process.env.NODE_ENV !== 'production') globalForPrisma.prisma = prisma;
+// ตรวจสอบการเชื่อมต่อฐานข้อมูล
+export const testConnection = async () => {
+  try {
+    await prisma.$connect();
+    console.log('✅ Database connected successfully');
+    return true;
+  } catch (error) {
+    console.error('❌ Database connection error:', error);
+    return false;
+  }
+};
 
 export default prisma;

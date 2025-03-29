@@ -1,9 +1,11 @@
+<<<<<<< Updated upstream
+=======
+// src/middleware/auth.ts
+>>>>>>> Stashed changes
 import { Request, Response, NextFunction } from 'express';
 import jwt from 'jsonwebtoken';
+import { CONFIG } from '../config/env';
 import prisma from '../utils/prisma';
-
-const JWT_SECRET = process.env.JWT_SECRET || 'your-secret-key';
-
 
 interface DecodedToken {
   id: string;
@@ -12,13 +14,16 @@ interface DecodedToken {
   exp: number;
 }
 
+/**
+ * Middleware ตรวจสอบความถูกต้องของ token และนำข้อมูลผู้ใช้มาแนบกับ request
+ */
 export const authenticateUser = async (
   req: Request,
   res: Response,
   next: NextFunction
 ) => {
   try {
-    // Check for Authorization header
+    // ตรวจสอบ Authorization header
     const authHeader = req.headers.authorization;
     
     if (!authHeader || !authHeader.startsWith('Bearer ')) {
@@ -28,14 +33,13 @@ export const authenticateUser = async (
       });
     }
 
-    // Get token from header
+    // ดึง token จาก header
     const token = authHeader.split(' ')[1];
 
-    // Verify token
-    // @ts-ignore - ข้ามการตรวจสอบ TypeScript สำหรับ jwt.verify
-    const decoded = jwt.verify(token, JWT_SECRET) as DecodedToken;
+    // ตรวจสอบความถูกต้องของ token
+    const decoded = jwt.verify(token, CONFIG.JWT.SECRET) as DecodedToken;
 
-    // Find user by ID
+    // ค้นหาผู้ใช้จาก ID
     const user = await prisma.user.findUnique({
       where: { id: decoded.id },
     });
@@ -47,7 +51,7 @@ export const authenticateUser = async (
       });
     }
 
-    // Attach user to request
+    // แนบข้อมูลผู้ใช้กับ request
     req.user = user;
     
     next();

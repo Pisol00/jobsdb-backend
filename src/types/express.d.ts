@@ -1,10 +1,10 @@
-declare namespace Express {
-    interface User {
-      id: string;
-      username?: string;
-      fullName: string;
-      email: string;
-      profileImage?: string;
-      provider?: string;
+// src/types/express.d.ts
+import { User } from '@prisma/client';
+
+declare global {
+  namespace Express {
+    interface Request {
+      user?: User;
     }
   }
+}
