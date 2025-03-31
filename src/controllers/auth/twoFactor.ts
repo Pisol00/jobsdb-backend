@@ -2,10 +2,11 @@
 import { Request, Response } from 'express';
 import prisma from '../../utils/prisma';
 import { verifyToken, generateToken } from '../../utils/jwt';
-import { saveTrustedDevice, resetFailedLoginAttempts } from '../../utils/security'; // เพิ่มการนำเข้าฟังก์ชัน
+import { saveTrustedDevice, resetFailedLoginAttempts } from '../../utils/security';
 import { formatUserResponse } from './index';
 import { VerifyOTPRequest } from '../../types/auth';
 import { asyncHandler } from '../../middleware/asyncHandler';
+import { logMessage, LogLevel } from '../../utils/errorLogger';
 
 /**
  * เปิด/ปิดการยืนยันตัวตนแบบสองขั้นตอน
@@ -58,7 +59,7 @@ export const toggleTwoFactor = asyncHandler(async (req: Request, res: Response) 
  * ตรวจสอบ OTP สำหรับ 2FA
  */
 export const verifyOTP = asyncHandler(async (req: Request, res: Response) => {
-  const { otp, tempToken, rememberDevice = false } = req.body as VerifyOTPRequest;
+  const { otp, tempToken, rememberDevice = false, deviceId } = req.body as VerifyOTPRequest;
 
   if (!otp || !tempToken) {
     return res.status(400).json({
@@ -117,18 +118,29 @@ export const verifyOTP = asyncHandler(async (req: Request, res: Response) => {
     },
   });
 
-  // รีเซ็ตการนับความพยายามล็อกอินที่ล้มเหลว
-  if (decoded.deviceId) {
-    await resetFailedLoginAttempts(
-      user.email,
-      req.ip || req.socket.remoteAddress || 'unknown', 
-      decoded.deviceId
-    );
-  }
+  // เพิ่ม: รีเซ็ตการนับความพยายามล็อกอินที่ล้มเหลว
+  const ipAddress = req.ip || req.socket.remoteAddress || 'unknown';
+  await resetFailedLoginAttempts(
+    user.email,
+    ipAddress,
+    deviceId || req.headers['user-agent'] || 'unknown-device'
+  );
+  
+  // บันทึก log สำเร็จ
+  logMessage(
+    LogLevel.INFO,
+    `User ${user.email} successfully verified OTP for 2FA`,
+    null,
+    {
+      userId: user.id,
+      ip: ipAddress,
+      deviceId: deviceId || 'not-provided'
+    }
+  );
 
   // จดจำอุปกรณ์ถ้ามีการร้องขอและมี deviceId
-  if (rememberDevice && decoded.deviceId) {
-    await saveTrustedDevice(user.id, decoded.deviceId);
+  if (rememberDevice && deviceId) {
+    await saveTrustedDevice(user.id, deviceId);
   }
 
   // สร้าง token สำหรับการเข้าสู่ระบบ

@@ -9,6 +9,7 @@ import { CONFIG } from '../../config/env';
 import { formatUserResponse } from './index';
 import { asyncHandler } from '../../middleware/asyncHandler';
 import { logMessage, LogLevel } from '../../utils/errorLogger';
+import { resetFailedLoginAttempts } from '../../utils/security'; // เพิ่มการนำเข้าฟังก์ชัน
 
 /**
  * สร้างและส่ง OTP สำหรับยืนยันอีเมล
@@ -102,11 +103,26 @@ export const verifyEmailToken = asyncHandler(async (req: Request, res: Response)
   });
 
   if (!user) {
+    // บันทึก log
+    logMessage(
+      LogLevel.WARN,
+      `Invalid or expired email verification token: ${token.substring(0, 8)}...`,
+      null
+    );
+    
     return res.status(400).json({
       success: false,
       message: 'Token ไม่ถูกต้องหรือหมดอายุแล้ว',
     });
   }
+
+  // บันทึก log
+  logMessage(
+    LogLevel.INFO,
+    `Valid email verification token for user ${user.email}`,
+    null,
+    { userId: user.id }
+  );
 
   res.status(200).json({
     success: true,
@@ -155,6 +171,13 @@ export const verifyEmailWithOTP = asyncHandler(async (req: Request, res: Respons
   }
 
   if (!user) {
+    logMessage(
+      LogLevel.WARN,
+      'Invalid or expired OTP/token for email verification',
+      null,
+      { otp, tokenProvided: !!token }
+    );
+    
     return res.status(400).json({
       success: false,
       message: 'รหัส OTP ไม่ถูกต้องหรือหมดอายุแล้ว',
@@ -163,6 +186,13 @@ export const verifyEmailWithOTP = asyncHandler(async (req: Request, res: Respons
 
   // ตรวจสอบว่า OTP ถูกต้อง (กรณีมี token)
   if (token && user.twoFactorOTP !== otp) {
+    logMessage(
+      LogLevel.WARN,
+      `Invalid OTP (${otp}) for email verification with valid token`,
+      null,
+      { userId: user.id }
+    );
+    
     return res.status(400).json({
       success: false,
       message: 'รหัส OTP ไม่ถูกต้อง',
@@ -180,8 +210,23 @@ export const verifyEmailWithOTP = asyncHandler(async (req: Request, res: Respons
     },
   });
 
+  // เพิ่ม: รีเซ็ตการนับความพยายามล็อกอินที่ล้มเหลว
+  const ipAddress = req.ip || req.socket.remoteAddress || 'unknown';
+  await resetFailedLoginAttempts(
+    user.email,
+    ipAddress,
+    req.headers['user-agent'] || 'email-verification'
+  );
+
   // สร้าง token สำหรับเข้าสู่ระบบ
   const jwtToken = generateToken(user);
+  
+  logMessage(
+    LogLevel.INFO,
+    `Email verification successful for user ${user.email}`,
+    null,
+    { userId: user.id }
+  );
 
   res.status(200).json({
     success: true,
@@ -210,9 +255,16 @@ export const resendEmailVerification = asyncHandler(async (req: Request, res: Re
   });
 
   if (!user) {
-    return res.status(404).json({
-      success: false,
-      message: 'ไม่พบผู้ใช้จากอีเมลนี้',
+    // ไม่ควรเปิดเผยว่าอีเมลนี้ไม่มีในระบบ (เพื่อความปลอดภัย)
+    logMessage(
+      LogLevel.WARN,
+      `Attempt to resend verification to non-existing email: ${email}`,
+      null
+    );
+    
+    return res.status(200).json({
+      success: true,
+      message: 'หากอีเมลนี้มีอยู่ในระบบ ระบบจะส่งรหัสยืนยันไปให้',
     });
   }
 
@@ -225,14 +277,28 @@ export const resendEmailVerification = asyncHandler(async (req: Request, res: Re
   }
 
   // สร้าง OTP และส่งอีเมลยืนยันใหม่
-  const { success } = await createEmailVerification(user.id);
+  const { success, verifyToken } = await createEmailVerification(user.id);
 
   if (success) {
+    logMessage(
+      LogLevel.INFO,
+      `Verification email resent to ${email}`,
+      null,
+      { userId: user.id }
+    );
+    
     res.status(200).json({
       success: true,
       message: 'ส่งอีเมลยืนยันใหม่เรียบร้อยแล้ว',
     });
   } else {
+    logMessage(
+      LogLevel.ERROR,
+      `Failed to resend verification email to ${email}`,
+      null,
+      { userId: user.id }
+    );
+    
     res.status(500).json({
       success: false,
       message: 'ไม่สามารถส่งอีเมลยืนยันได้ กรุณาลองใหม่อีกครั้ง',

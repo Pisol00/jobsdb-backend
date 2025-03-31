@@ -81,6 +81,7 @@ router.get(
         const token = generateToken(user, true);
         
         // ส่งกลับไปยัง frontend พร้อม token
+        // ใช้ path parameter แทน query parameter
         res.redirect(`${FRONTEND_URL}/oauth-callback/${token}`);
       } catch (error) {
         console.error('❌ Error in OAuth callback:', error);

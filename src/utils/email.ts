@@ -41,7 +41,8 @@ export const createOTPEmailTemplate = (
   }
   
   const expiresAt = Date.now() + CONFIG.OTP_EXPIRY;
-  const verifyOtpUrl = `${CONFIG.FRONTEND_URL}/auth/verify-otp/${tempToken}?expiresAt=${expiresAt}`;
+  // เปลี่ยนการใช้ query parameter เป็น path parameter
+  const verifyOtpUrl = `${CONFIG.FRONTEND_URL}/auth/verify-otp/${tempToken}/${expiresAt}`;
 
   return `
     <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; border: 1px solid #e0e0e0; border-radius: 5px;">
@@ -75,7 +76,10 @@ export const createOTPEmailTemplate = (
 /**
  * สร้างเทมเพลตอีเมลสำหรับการรีเซ็ตรหัสผ่าน
  */
-export const createPasswordResetEmailTemplate = (user: UserData, resetURL: string): string => {
+export const createPasswordResetEmailTemplate = (user: UserData, resetToken: string): string => {
+  // เปลี่ยนการใช้ query parameter เป็น path parameter
+  const resetURL = `${CONFIG.FRONTEND_URL}/auth/reset-password/${resetToken}`;
+  
   return `
     <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; border: 1px solid #e0e0e0; border-radius: 5px;">
       <div style="text-align: center; margin-bottom: 20px;">
@@ -137,7 +141,8 @@ export const createEmailVerificationTemplate = (
   verifyToken: string,
   fullName: string = ""
 ): string => {
-  const verifyUrl = `${CONFIG.FRONTEND_URL}/auth/verify-email?token=${verifyToken}`;
+  // เปลี่ยนการใช้ query parameter เป็น path parameter
+  const verifyUrl = `${CONFIG.FRONTEND_URL}/auth/verify-email/${verifyToken}`;
   
   return `
     <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; border: 1px solid #e0e0e0; border-radius: 5px;">
